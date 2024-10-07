@@ -1,0 +1,11 @@
+Data drivers are drivers for blocks of data.
+
+They do not conform to the regular driver structure,
+where the function information is listed in an array
+created at compile time. Rather, these have header files
+which will be directly included by other files using
+the data driver at hand.
+
+Data drivers can have their own sets of functions, and
+serve to provide a way to easily manipulate the data
+which may be found inside of a file.
