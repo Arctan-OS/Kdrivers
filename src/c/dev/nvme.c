@@ -1,5 +1,5 @@
 /**
- * @file dri_defs.h
+ * @file nvme.c
  *
  * @author awewsomegamer <awewsomegamer@gmail.com>
  *
@@ -23,35 +23,45 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * @DESCRIPTION
- * Definitions for driver indices and groups.
 */
-#ifndef ARC_DRIVERS_DRI_DEFS_H
-#define ARC_DRIVERS_DRI_DEFS_H
+#include <arctan.h>
+#include <lib/resource.h>
+#include <stdint.h>
+#include <global.h>
+#include <lib/util.h>
+#include <drivers/dri_defs.h>
+#include <lib/perms.h>
 
-// Driver group 0x0 (Filesystem)
-#define ARC_DRI_FS 0x0
-// Indices within filesystem group
-#define ARC_SDRI_INITRAMFS 0x00
-#define ARC_FDRI_INITRAMFS 0x01
-#define ARC_SDRI_EXT2      0x02
-#define ARC_FDRI_EXT2      0x03
-#define ARC_SDRI_BUFFER    0x04
-#define ARC_FDRI_BUFFER    0x05
-#define ARC_SDRI_FIFO      0x06
-#define ARC_FDRI_FIFO      0x07
+int empty_nvme() {
+	return 0;
+}
 
-// Undefined driver group 0x1
-// Undefined driver group 0x2
+int init_nvme(struct ARC_Resource *res, void *arg) {
+	ARC_DEBUG(INFO, "Creating new NVME with resource %p and argument %p\n", res, arg);
 
-// Driver group 0x3 (Devices)
-#define ARC_DRI_DEV 0x3
-// Indices within devices group
-#define ARC_DRI_RSDT 0x00
-#define ARC_DRI_APIC 0x01
-#define ARC_DRI_FADT 0x02
-#define ARC_DRI_DSDT 0x03
-#define ARC_DRI_HPET 0x04
+	return 0;
+}
 
-#define ARC_DRI_PCI_TERMINATOR 0xFFFFFFFF
+int uninit_nvme() {
+	return 0;
+};
 
-#endif
+static uint32_t pci_codes[] = {
+        0x1b360010,
+        ARC_DRI_PCI_TERMINATOR
+};
+
+ARC_REGISTER_DRIVER(3, nvme_driver) = {
+        .index = 0,
+	.instance_counter = 0,
+	.name_format = "nvme%d",
+        .init = init_nvme,
+	.uninit = uninit_nvme,
+	.read = empty_nvme,
+	.write = empty_nvme,
+	.seek = empty_nvme,
+	.rename = empty_nvme,
+	.open = empty_nvme,
+	.close = empty_nvme,
+	.pci_codes = pci_codes
+};

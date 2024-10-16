@@ -31,6 +31,7 @@
 #include <global.h>
 #include <lib/util.h>
 #include <sys/stat.h>
+#include <drivers/dri_defs.h>
 #include <abi-bits/seek-whence.h>
 
 #define ARC_NAME_OFFSET (sizeof(struct ARC_HeaderCPIO))
@@ -175,4 +176,5 @@ ARC_REGISTER_DRIVER(0, initramfs_file) = {
 	.write = initramfs_write,
 	.seek = initramfs_seek,
 	.rename = initramfs_empty,
+	.pci_codes = NULL
 };

@@ -26,8 +26,10 @@
  * File driver for the EXT2 filesystem.
 */
 #include <lib/resource.h>
+#include <drivers/dri_defs.h>
 #include <abi-bits/seek-whence.h>
 
 ARC_REGISTER_DRIVER(0, ext2_file) = {
 	.index = 3,
+	.pci_codes = NULL
 };

@@ -26,7 +26,9 @@
  * Superblock dirvers for the EXT2 filesystem.
 */
 #include <lib/resource.h>
+#include <drivers/dri_defs.h>
 
 ARC_REGISTER_DRIVER(0, ext2_super) = {
 	.index = 2,
+	.pci_codes = NULL
 };

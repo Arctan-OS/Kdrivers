@@ -33,6 +33,7 @@
 #include <time.h>
 #include <lib/util.h>
 #include <sys/stat.h>
+#include <drivers/dri_defs.h>
 
 #define ARC_NAME_OFFSET (sizeof(struct ARC_HeaderCPIO))
 #define ARC_NAME_SIZE(header) (header->namesize + (header->namesize & 1))
@@ -173,7 +174,7 @@ ARC_REGISTER_DRIVER(0, initramfs_super) = {
 	.name_format = "cpiofs%d",
 	.init = initramfs_init,
 	.uninit = initramfs_uninit,
-	.open = initramfs_empty,
+	.open =  initramfs_empty,
 	.close = initramfs_empty,
 	.read = initramfs_empty,
 	.write = initramfs_empty,
@@ -181,5 +182,6 @@ ARC_REGISTER_DRIVER(0, initramfs_super) = {
 	.rename = initramfs_empty,
 	.identifer = ARC_DRIVER_IDEN_SUPER,
 	.driver = (void *)&initramfs_super_spec,
+	.pci_codes = NULL
 };
 

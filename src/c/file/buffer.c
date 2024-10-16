@@ -29,6 +29,7 @@
 #include <global.h>
 #include <mm/allocator.h>
 #include <lib/util.h>
+#include <drivers/dri_defs.h>
 #include <abi-bits/seek-whence.h>
 #include <arctan.h>
 
@@ -168,4 +169,5 @@ ARC_REGISTER_DRIVER(0, buffer) = {
 	.seek = buffer_seek,
 	.rename = buffer_empty,
 	.close = buffer_empty,
+	.pci_codes = NULL
 };
