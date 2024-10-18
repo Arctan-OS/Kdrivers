@@ -46,11 +46,7 @@
 // Driver group 0x3 (Devices)
 #define ARC_DRI_DEV 0x3
 // Indices within devices group
-#define ARC_DRI_RSDT 0x00
-#define ARC_DRI_APIC 0x01
-#define ARC_DRI_FADT 0x02
-#define ARC_DRI_DSDT 0x03
-#define ARC_DRI_HPET 0x04
+#define ARC_DRI_NVME 0x0
 
 #define ARC_DRI_PCI_TERMINATOR 0xFFFFFFFF
 
