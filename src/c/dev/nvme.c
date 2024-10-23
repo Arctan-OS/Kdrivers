@@ -179,7 +179,7 @@ struct qpair_list_entry {
 	size_t comp_len;
 	size_t comp_doorbell;
 	struct qpair_list_entry *next;
-	int i;
+	int id;
 };
 
 struct driver_state {
@@ -188,11 +188,28 @@ struct driver_state {
 	uint32_t flags; // Bit | Description
 			// 0   | 1: Kernel Initialized
 	struct qpair_list_entry *list;
-	int queue_count;
+	uint64_t id_bmp;
 };
 
 int empty_nvme() {
 	return 0;
+}
+
+static struct qpair_list_entry *create_qpair(struct driver_state *state, uintptr_t sub, size_t sub_len, uintptr_t comp, size_t comp_len) {
+	struct qpair_list_entry *entry = (struct qpair_list_entry *)alloc(sizeof(*entry));
+
+	entry->id = __builtin_ffs(state->id_bmp) - 1;
+	state->id_bmp &= ~(1 << entry->id);
+
+	entry->sub = (struct qs_entry *)sub;
+	entry->sub_len = sub_len;
+	entry->comp = (struct qc_entry *)comp;
+	entry->comp_len = comp_len;
+	entry->next = state->list;
+
+	state->list = entry;
+
+	return entry;
 }
 
 static int reset_controller(struct driver_state *state) {
@@ -208,6 +225,8 @@ static int reset_controller(struct driver_state *state) {
 	while (properties->csts.rdy);
 
 	if ((state->flags & 1) == 0) {
+		state->id_bmp = -1;
+
 		void *queues = pmm_contig_alloc(2);
 
 		memset(queues, 0, PAGE_SIZE * 2);
@@ -215,17 +234,7 @@ static int reset_controller(struct driver_state *state) {
 		properties->acq = ARC_HHDM_TO_PHYS(queues) + 0x1000;
 		*(uint32_t *)((uintptr_t)properties + 0x24) = 63 | (0xFF << 16);
 
-		struct qpair_list_entry *entry = (struct qpair_list_entry *)alloc(sizeof(*entry));
-
-		entry->i = 0;
-		entry->sub = (struct qs_entry *)ARC_PHYS_TO_HHDM(properties->asq);
-		entry->sub_len = properties->aqa.asqs + 1;
-		entry->comp = (struct qc_entry *)ARC_PHYS_TO_HHDM(properties->acq);
-		entry->comp_len = properties->aqa.acqs + 1;
-		entry->next = NULL;
-
-		state->list = entry;
-		state->queue_count++;
+		create_qpair(state, ARC_PHYS_TO_HHDM(properties->asq), properties->aqa.asqs + 1, ARC_PHYS_TO_HHDM(properties->acq), properties->aqa.acqs + 1);
 	}
 
 	if ((properties->cap.css >> 7) & 1) {
@@ -254,7 +263,7 @@ static int submit_queue_command(struct driver_state *state, struct qs_entry *com
 	}
 
 	struct qpair_list_entry *entry = state->list;
-	while (entry != NULL && entry->i != queue) {
+	while (entry != NULL && entry->id != queue) {
 		entry = entry->next;
 	}
 
@@ -286,12 +295,49 @@ static void *identify_queue(struct driver_state *state, int queue) {
 		.cdw10 = 0x01,
 		.prp.entry1 = ARC_HHDM_TO_PHYS(buffer),
         };
-
 	submit_queue_command(state, &cmd, queue);
 
 	// TODO: Wait for completion
 
 	return buffer;
+}
+
+static int create_io_queue(struct driver_state *state, int interrupt) {
+	if (state == NULL) {
+		return 0;
+	}
+
+	const int qpages = 3;
+	void *queues = pmm_contig_alloc(qpages);
+	uintptr_t sub = ARC_HHDM_TO_PHYS(queues);
+	uintptr_t comp = sub + ((qpages - 1) * PAGE_SIZE);
+
+	size_t sub_len = ((qpages - 1) * PAGE_SIZE) / sizeof(struct qs_entry);
+	size_t comp_len = ((qpages - (qpages - 1)) * PAGE_SIZE) / sizeof(struct qs_entry);
+
+	struct qpair_list_entry *entry = create_qpair(state, ARC_PHYS_TO_HHDM(sub), sub_len, ARC_PHYS_TO_HHDM(comp), comp_len);
+
+	struct qs_entry cmd = {
+	        .cdw0.opcode = 0x01,
+	        .prp.entry1 = sub,
+		.cdw10 = entry->id | (sub_len << 16),
+		.cdw11 = 0b111 | (entry->id << 16)
+	};
+
+	submit_queue_command(state, &cmd, 0);
+
+	cmd.cdw0.opcode = 0x05;
+	cmd.prp.entry1 = comp;
+	cmd.cdw10 = entry->id | (comp_len << 16);
+	cmd.cdw11 = 0b1 | ((interrupt > 31) << 1) | ((interrupt & 0xFFFF) << 16);
+
+	submit_queue_command(state, &cmd, 0);
+
+	return entry->id;
+}
+
+static int delete_io_queue(struct driver_state *state) {
+	return 0;
 }
 
 int init_nvme(struct ARC_Resource *res, void *arg) {
@@ -349,10 +395,28 @@ int init_nvme(struct ARC_Resource *res, void *arg) {
 	reset_controller(state);
 	uint8_t *data = identify_queue(state, 0);
 
+	printf("Data 1:\n");
 	for (int i = 0; i < PAGE_SIZE; i++) {
 		printf("%02X ", *(data + i));
 	}
 	printf("\n");
+
+	pmm_free(data);
+
+	int i = create_io_queue(state, -1);
+
+	printf("%d\n", i);
+
+	data = identify_queue(state, i);
+	printf("Data 2:\n");
+	if (data != NULL) {
+		for (int i = 0; i < PAGE_SIZE; i++) {
+			printf("%02X ", *(data + i));
+		}
+	}
+	printf("\n");
+
+	pmm_free(data);
 
 	return 0;
 }
