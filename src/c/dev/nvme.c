@@ -36,140 +36,7 @@
 #include <mm/allocator.h>
 #include <mm/pmm.h>
 #include <arch/x86-64/apic/apic.h>
-
-#define SQnTDBL(__properties, __n) ((uintptr_t)__properties->data + ((2 * __n) * (4 << __properties->cap.dstrd)))
-#define CQnHDBL(__properties, __n) ((uintptr_t)__properties->data + ((2 * __n + 1) * (4 << __properties->cap.dstrd)))
-
-struct controller_properties {
-	struct {
-		uint16_t mqes : 16;
-		uint8_t cqr : 1;
-		uint8_t ams : 2;
-		uint8_t resv0 : 5;
-		uint8_t to : 8;
-		uint8_t dstrd : 4;
-		uint8_t nssrs : 1;
-		uint8_t css : 8;
-		uint8_t bps : 1;
-		uint8_t cps : 2;
-		uint8_t mpsmin : 4;
-		uint8_t mpsmax : 4;
-		uint8_t pmrs : 1;
-		uint8_t cmbs : 1;
-		uint8_t nsss : 1;
-		uint8_t crms : 2;
-		uint8_t nsses : 1;
-		uint8_t resv1 : 2;
-	}__attribute__((packed)) cap;
-
-	struct {
-		uint8_t tmp;
-		uint8_t min;
-		uint16_t maj;
-	}__attribute__((packed)) vs;
-
-	uint32_t intms;
-	uint32_t intmc;
-
-	struct  {
-		uint8_t en : 1;
-		uint8_t resv0 : 3;
-		uint8_t css : 3;
-		uint8_t mps : 4;
-		uint8_t ams : 3;
-		uint8_t shn : 2;
-		uint8_t iosqes : 4;
-		uint8_t iocqes : 4;
-		uint8_t crime : 1;
-		uint16_t resv1 : 7;
-	}__attribute__((packed)) cc;
-
-	uint32_t resv0;
-
-	struct {
-		uint8_t rdy : 1;
-		uint8_t cfs : 1;
-		uint8_t shst : 2;
-		uint8_t nssro :  1;
-		uint8_t pp : 1;
-		uint8_t st : 1;
-		uint32_t resv0 : 25;
-	}__attribute__((packed)) csts;
-
-	uint32_t nssr;
-
-	struct {
-		uint16_t asqs : 12;
-		uint8_t resv0 : 4;
-		uint16_t acqs : 12;
-		uint8_t resv1 : 4;
-	}__attribute__((packed)) aqa;
-
-	uint64_t asq;
-	uint64_t acq;
-	uint32_t cmbloc;
-	uint32_t cmbsz;
-	uint32_t bpinfo;
-	uint32_t bprsel;
-	uint64_t bpmbl;
-	uint64_t cmbmsc;
-	uint32_t cmbsts;
-	uint32_t cmbebs;
-	uint32_t cmbswtp;
-	uint32_t nssd;
-	uint32_t crto;
-	uint8_t resv1[0xD94];
-	uint32_t pmrcap;
-	uint32_t pmrctl;
-	uint32_t pmrsts;
-	uint32_t pmrebs;
-	uint32_t pmrswtp;
-	uint32_t pmrmscl;
-	uint32_t pmrmscu;
-	uint8_t resv2[0x1E4];
-	uint8_t data[];
-}__attribute__((packed));
-STATIC_ASSERT(sizeof(struct controller_properties) == 0x1000, "Controller properties size mismatch");
-
-struct qs_entry {
-	struct {
-		uint8_t opcode;
-		uint8_t fuse : 2;
-		uint8_t resv0 : 4;
-		uint8_t psdt : 2;
-		uint16_t cid;
-	}__attribute__((packed)) cdw0;
-
-	uint32_t nsid;
-	uint32_t cdw2;
-	uint32_t cdw3;
-	uint64_t mptr;
-	// If CDW0.PSDT is set to 01 or 10, the following
-	// two are SGL1, otherwise they are PRP1 and PRP2
-	// respectively
-	struct {
-		uint64_t entry1;
-		uint64_t entry2;
-	}__attribute__((packed)) prp;
-	uint32_t cdw10;
-	uint32_t cdw11;
-	uint32_t cdw12;
-	uint32_t cdw13;
-	uint32_t cdw14;
-	uint32_t cdw15;
-}__attribute__((packed));
-STATIC_ASSERT(sizeof(struct qs_entry) == 64, "Submission Queue Entry size mismatch");
-
-struct qc_entry {
-	uint32_t dw0;
-	uint32_t dw1;
-	uint16_t sq_head_ptr;
-	uint16_t sq_ident;
-	uint16_t cid;
-	uint8_t phase : 1;
-	uint16_t status : 15;
-}__attribute__((packed));
-STATIC_ASSERT(sizeof(struct qc_entry) == 16, "Completeion Queue Entry Size mismatch");
+#include <drivers/dev/nvme.h>
 
 struct qpair_list_entry {
 	struct qs_entry *sub;
@@ -188,7 +55,15 @@ struct driver_state {
 	uint32_t flags; // Bit | Description
 			// 0   | 1: Kernel Initialized
 	struct qpair_list_entry *list;
+	struct qpair_list_entry *admin_entry;
 	uint64_t id_bmp;
+	size_t max_queue_count;
+	size_t max_transfer_size;
+	uint32_t ctratt;
+	uint32_t controller_version;
+	uint16_t controller_id;
+	uint8_t controller_type;
+
 };
 
 int empty_nvme() {
@@ -196,6 +71,10 @@ int empty_nvme() {
 }
 
 static struct qpair_list_entry *create_qpair(struct driver_state *state, uintptr_t sub, size_t sub_len, uintptr_t comp, size_t comp_len) {
+	if (state == NULL || state->id_bmp == 0 || comp_len == 0 || sub_len == 0) {
+		return NULL;
+	}
+
 	struct qpair_list_entry *entry = (struct qpair_list_entry *)alloc(sizeof(*entry));
 
 	entry->id = __builtin_ffs(state->id_bmp) - 1;
@@ -212,6 +91,140 @@ static struct qpair_list_entry *create_qpair(struct driver_state *state, uintptr
 	return entry;
 }
 
+static int delete_qpair(struct qpair_list_entry *qpair) {
+	(void)qpair;
+	ARC_DEBUG(WARN, "Implement\n");
+
+	return 0;
+}
+
+static int delete_all_qpairs(struct driver_state *state) {
+	state->id_bmp = -1;
+	ARC_DEBUG(WARN, "Implement\n");
+
+	return 0;
+}
+
+static int submit_queue_command(struct driver_state *state, struct qs_entry *command, int queue) {
+	if (state == NULL || command == NULL) {
+		ARC_DEBUG(ERR, "State or command is NULL\n");
+		return -1;
+	}
+
+	struct qpair_list_entry *entry = queue == -1 ? state->list : state->admin_entry;
+	while (queue != -1 && entry != NULL && entry->id != queue) {
+		entry = entry->next;
+	}
+
+	if (entry == NULL) {
+		ARC_DEBUG(ERR, "Found entry is NULL\n");
+		return -1;
+	}
+
+	size_t ent = entry->sub_doorbell++; // TODO: Atomize
+	size_t wrap = entry->sub_doorbell % entry->sub_len; // TODO: Atomize
+
+	// NOTE: One is added to queue to convert from an internal qpair ID to an index.
+	uint32_t *doorbell = (uint32_t *)SQnTDBL(state->properties, queue + 1);
+	memcpy(&entry->sub[ent], command, sizeof(*command));
+
+	entry->sub_doorbell = wrap;
+	*doorbell = wrap;
+
+	return 0;
+}
+
+static struct qc_entry *find_completion_entry(struct driver_state *state, struct qs_entry *command) {
+	(void)state;
+	(void)command;
+	ARC_DEBUG(WARN, "Implement\n");
+
+	return NULL;
+}
+
+static void *identify_queue(struct driver_state *state, uint8_t cns, int queue) {
+	void *buffer = pmm_alloc();
+
+	if (buffer == NULL) {
+		ARC_DEBUG(ERR, "Failed to allocate return buffer\n");
+		return NULL;
+	}
+
+	struct qs_entry cmd = {
+	        .cdw0.opcode = 0x06,
+		.cdw10 = cns,
+		.prp.entry1 = ARC_HHDM_TO_PHYS(buffer),
+        };
+
+	if (submit_queue_command(state, &cmd, queue) != 0) {
+		ARC_DEBUG(ERR, "Command submission failed\n");
+		pmm_free(buffer);
+		return NULL;
+	}
+
+	// TODO: Wait for completion
+
+	return buffer;
+}
+
+static int configure_controller(struct driver_state *state) {
+	if (state == NULL || !(state->flags & 1)) {
+		ARC_DEBUG(ERR, "Cannot configure controller, either not initialized or state does not exist\n");
+		return -1;
+	}
+
+	uint8_t *controller_conf = identify_queue(state, 0x1, ADMIN_QUEUE);
+
+	for (int i = 0; i < PAGE_SIZE; i++) {
+		printf("%02X ", *(controller_conf + i));
+	}
+	printf("\n");
+
+	if (controller_conf == NULL) {
+		ARC_DEBUG(ERR, "Failed to configure, returned controller configuration is NULL\n");
+		return -1;
+	}
+
+	// 77    Maximum Data Transfer Size in 2 << cap.mpsmin
+	//       CTRATT mem bit cleared, includes the size of the interleaved metadata
+	//       mem bit set then this is size of user data only
+	state->max_transfer_size = controller_conf[77];
+
+	// 79:78 CNTLID
+	state->controller_id = *(uint16_t *)(&controller_conf[78]);
+
+	// 83:80 VERS
+	state->controller_version = *(uint32_t *)(&controller_conf[80]);
+
+	// 99:96 CTRATT bit 16 is MEM for 77
+	//              bit 11 is multi-domain subsystem
+	//              bit 10 UUID list 1: supported
+	state->ctratt = *(uint32_t *)(&controller_conf[96]);
+
+	// 111   Controller type (0: resv, 1: IO, 2: discovery, 3 ADMIN, all else resv)
+	state->controller_type = controller_conf[111];
+
+	// TODO: CRDTs
+
+	// Request 64 IO completion and
+	struct qs_entry cmd = {
+	        .cdw0.opcode = 0x9,
+	        .cdw10 = 0x7,
+		.cdw11 = 64 | (64 << 16)
+        };
+	submit_queue_command(state, &cmd, ADMIN_QUEUE);
+
+	// Check to see how many we got
+	cmd.cdw0.opcode = 0xA;
+	cmd.cdw10 = 0x7;
+
+	submit_queue_command(state, &cmd, ADMIN_QUEUE);
+
+	state->max_queue_count = min(0, 0);
+
+	return 0;
+}
+
 static int reset_controller(struct driver_state *state) {
 	if (state == NULL || state->properties == NULL) {
 		ARC_DEBUG(ERR, "Failed to reset controller, state or properties NULL\n");
@@ -224,18 +237,35 @@ static int reset_controller(struct driver_state *state) {
 
 	while (properties->csts.rdy);
 
-	if ((state->flags & 1) == 0) {
-		state->id_bmp = -1;
+	// Create adminstrator queue
+	void *queues = pmm_contig_alloc(2);
 
-		void *queues = pmm_contig_alloc(2);
-
-		memset(queues, 0, PAGE_SIZE * 2);
-		properties->asq = ARC_HHDM_TO_PHYS(queues);
-		properties->acq = ARC_HHDM_TO_PHYS(queues) + 0x1000;
-		*(uint32_t *)((uintptr_t)properties + 0x24) = 63 | (0xFF << 16);
-
-		create_qpair(state, ARC_PHYS_TO_HHDM(properties->asq), properties->aqa.asqs + 1, ARC_PHYS_TO_HHDM(properties->acq), properties->aqa.acqs + 1);
+	if (queues == NULL) {
+		ARC_DEBUG(ERR, "Failed to allocate adminstrator queues\n");
+		return -1;
 	}
+
+	delete_all_qpairs(state);
+
+	if (state->flags & 1) {
+		// TODO: Uninitialize stuff
+	}
+
+	memset(queues, 0, PAGE_SIZE * 2);
+	properties->asq = ARC_HHDM_TO_PHYS(queues);
+	properties->acq = ARC_HHDM_TO_PHYS(queues) + 0x1000;
+	*(uint32_t *)((uintptr_t)properties + 0x24) = 63 | (0xFF << 16);
+
+	state->admin_entry = create_qpair(state, ARC_PHYS_TO_HHDM(properties->asq), properties->aqa.asqs + 1, ARC_PHYS_TO_HHDM(properties->acq), properties->aqa.acqs + 1);
+
+	if (state->admin_entry == NULL) {
+		ARC_DEBUG(ERR, "Failed to create adminstrator queue pair\n");
+		return -2;
+	}
+
+	// Clear bitmap, as admin queue is not part of IO queues
+	state->id_bmp = -1;
+	state->admin_entry->id = -1;
 
 	if ((properties->cap.css >> 7) & 1) {
 		properties->cc.css = 0b111;
@@ -254,55 +284,10 @@ static int reset_controller(struct driver_state *state) {
 
 	state->flags |= 1;
 
-	return 0;
+	return configure_controller(state);
 }
 
-static int submit_queue_command(struct driver_state *state, struct qs_entry *command, int queue) {
-	if (state == NULL || command == NULL) {
-		return -1;
-	}
-
-	struct qpair_list_entry *entry = state->list;
-	while (entry != NULL && entry->id != queue) {
-		entry = entry->next;
-	}
-
-	if (entry == NULL) {
-		return -1;
-	}
-
-	size_t ent = entry->sub_doorbell++; // TODO: Atomize
-	size_t wrap = entry->sub_doorbell % entry->sub_len; // TODO: Atomize
-
-	uint32_t *doorbell = (uint32_t *)SQnTDBL(state->properties, queue);
-	memcpy(&entry->sub[ent], command, sizeof(*command));
-
-	entry->sub_doorbell = wrap;
-	*doorbell = wrap;
-
-	return 0;
-}
-
-static void *identify_queue(struct driver_state *state, int queue) {
-	void *buffer = pmm_alloc();
-
-	if (buffer == NULL) {
-		return NULL;
-	}
-
-	struct qs_entry cmd = {
-	        .cdw0.opcode = 0x06,
-		.cdw10 = 0x01,
-		.prp.entry1 = ARC_HHDM_TO_PHYS(buffer),
-        };
-	submit_queue_command(state, &cmd, queue);
-
-	// TODO: Wait for completion
-
-	return buffer;
-}
-
-static int create_io_queue(struct driver_state *state, int interrupt) {
+static int create_io_queue(struct driver_state *state, uint16_t command_set, uint16_t interrupt) {
 	if (state == NULL) {
 		return 0;
 	}
@@ -317,21 +302,30 @@ static int create_io_queue(struct driver_state *state, int interrupt) {
 
 	struct qpair_list_entry *entry = create_qpair(state, ARC_PHYS_TO_HHDM(sub), sub_len, ARC_PHYS_TO_HHDM(comp), comp_len);
 
+	if (entry == NULL) {
+		pmm_contig_free(queues, qpages);
+		return -1;
+	}
+
+	// Create submission queue
 	struct qs_entry cmd = {
 	        .cdw0.opcode = 0x01,
 	        .prp.entry1 = sub,
 		.cdw10 = entry->id | (sub_len << 16),
-		.cdw11 = 0b111 | (entry->id << 16)
+		.cdw11 = 0b111 | (entry->id << 16),
+		.cdw12 = command_set
 	};
 
-	submit_queue_command(state, &cmd, 0);
+	submit_queue_command(state, &cmd, ADMIN_QUEUE);
 
+	// Create completion queue
 	cmd.cdw0.opcode = 0x05;
 	cmd.prp.entry1 = comp;
 	cmd.cdw10 = entry->id | (comp_len << 16);
 	cmd.cdw11 = 0b1 | ((interrupt > 31) << 1) | ((interrupt & 0xFFFF) << 16);
+	cmd.cdw12 = 0;
 
-	submit_queue_command(state, &cmd, 0);
+	submit_queue_command(state, &cmd, ADMIN_QUEUE);
 
 	return entry->id;
 }
@@ -393,30 +387,6 @@ int init_nvme(struct ARC_Resource *res, void *arg) {
 	res->driver_state = state;
 
 	reset_controller(state);
-	uint8_t *data = identify_queue(state, 0);
-
-	printf("Data 1:\n");
-	for (int i = 0; i < PAGE_SIZE; i++) {
-		printf("%02X ", *(data + i));
-	}
-	printf("\n");
-
-	pmm_free(data);
-
-	int i = create_io_queue(state, -1);
-
-	printf("%d\n", i);
-
-	data = identify_queue(state, i);
-	printf("Data 2:\n");
-	if (data != NULL) {
-		for (int i = 0; i < PAGE_SIZE; i++) {
-			printf("%02X ", *(data + i));
-		}
-	}
-	printf("\n");
-
-	pmm_free(data);
 
 	return 0;
 }
