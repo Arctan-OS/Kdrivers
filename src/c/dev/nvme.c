@@ -37,6 +37,7 @@
 #include <mm/pmm.h>
 #include <arch/x86-64/apic/apic.h>
 #include <drivers/dev/nvme.h>
+#include <lib/atomics.h>
 
 struct qpair_list_entry {
 	struct qs_entry *sub;
@@ -57,13 +58,13 @@ struct driver_state {
 	struct qpair_list_entry *list;
 	struct qpair_list_entry *admin_entry;
 	uint64_t id_bmp;
-	size_t max_queue_count;
+	size_t max_ioqpair_count;
 	size_t max_transfer_size;
+	ARC_GenericMutex qpair_lock;
 	uint32_t ctratt;
 	uint32_t controller_version;
 	uint16_t controller_id;
 	uint8_t controller_type;
-
 };
 
 int empty_nvme() {
@@ -77,16 +78,21 @@ static struct qpair_list_entry *create_qpair(struct driver_state *state, uintptr
 
 	struct qpair_list_entry *entry = (struct qpair_list_entry *)alloc(sizeof(*entry));
 
+	if (entry == NULL) {
+		return NULL;
+	}
+
+	mutex_lock(&state->qpair_lock);
 	entry->id = __builtin_ffs(state->id_bmp) - 1;
 	state->id_bmp &= ~(1 << entry->id);
-
 	entry->sub = (struct qs_entry *)sub;
 	entry->sub_len = sub_len;
 	entry->comp = (struct qc_entry *)comp;
 	entry->comp_len = comp_len;
 	entry->next = state->list;
-
 	state->list = entry;
+
+	mutex_unlock(&state->qpair_lock);
 
 	return entry;
 }
@@ -111,8 +117,8 @@ static int submit_queue_command(struct driver_state *state, struct qs_entry *com
 		return -1;
 	}
 
-	struct qpair_list_entry *entry = queue == -1 ? state->list : state->admin_entry;
-	while (queue != -1 && entry != NULL && entry->id != queue) {
+	struct qpair_list_entry *entry = queue != ADMIN_QUEUE ? state->list : state->admin_entry;
+	while (queue != ADMIN_QUEUE && entry != NULL && entry->id != queue) {
 		entry = entry->next;
 	}
 
@@ -121,26 +127,103 @@ static int submit_queue_command(struct driver_state *state, struct qs_entry *com
 		return -1;
 	}
 
-	size_t ent = entry->sub_doorbell++; // TODO: Atomize
-	size_t wrap = entry->sub_doorbell % entry->sub_len; // TODO: Atomize
+	size_t ent = ARC_ATOMIC_INC(entry->sub_doorbell);
+	ent--;
+
+	// CID Format:
+	// Bit(s) | Description
+	// 14:0   | Data
+	//        |   If bit 15 == 0:
+	//        |     5:0 - Queue pair identifier
+	//        |     13:6 - Command index
+	//        |     14 - Reserved
+	//        |   Else:
+	//        |     7:0 - Command index
+	//        |     14:8 - Reserved
+	// 15     | 1: Command is in Admin Queue
+
+	if (queue == ADMIN_QUEUE) {
+		command->cdw0.cid = (1 << 15) | (ent & 0xFF);
+	} else {
+		command->cdw0.cid = (queue & 0x3F) | ((ent & 0xFF) << 6);
+	}
 
 	// NOTE: One is added to queue to convert from an internal qpair ID to an index.
 	uint32_t *doorbell = (uint32_t *)SQnTDBL(state->properties, queue + 1);
 	memcpy(&entry->sub[ent], command, sizeof(*command));
 
-	entry->sub_doorbell = wrap;
-	*doorbell = wrap;
+	entry->sub_doorbell = entry->sub_doorbell % entry->sub_len;
+	*doorbell = entry->sub_doorbell;
 
 	return 0;
 }
 
-static struct qc_entry *find_completion_entry(struct driver_state *state, struct qs_entry *command) {
-	(void)state;
-	(void)command;
-	ARC_DEBUG(WARN, "Implement\n");
+static struct qc_entry *find_completion_entry(struct driver_state *state, struct qs_entry *command, struct qpair_list_entry **return_qpair, int *index) {
+	int queue = ((command->cdw0.cid >> 15) & 1) ? ADMIN_QUEUE : command->cdw0.cid & 0x3F;
+
+	struct qpair_list_entry *entry = queue != ADMIN_QUEUE ? state->list : state->admin_entry;
+	while (queue != ADMIN_QUEUE && entry != NULL && entry->id != queue) {
+		entry = entry->next;
+	}
+
+	if (entry == NULL) {
+		ARC_DEBUG(ERR, "Could not find qpair\n");
+		return NULL;
+	}
+
+	if (return_qpair != NULL) {
+		*return_qpair = entry;
+	}
+
+	struct qc_entry *completions = (struct qc_entry *)entry->comp;
+
+	int ptr = entry->comp_doorbell;
+	for (size_t i = 0; i < entry->comp_len; i++) {
+		size_t j = (ptr + i) % entry->comp_len;
+		if (completions[j].cid == command->cdw0.cid) {
+			if (index != NULL) {
+				*index = j;
+			}
+
+			return &completions[j];
+		}
+	}
 
 	return NULL;
 }
+
+static struct qc_entry *poll_completion_queue(struct driver_state *state, struct qs_entry *command) {
+	struct qc_entry *entry = NULL;
+
+	struct qpair_list_entry *qpair = NULL;
+	int index = -1;
+	while (entry == NULL) {
+		entry = find_completion_entry(state, command, &qpair, &index);
+	}
+
+	// Save for caller
+	struct qc_entry *ret = (struct qc_entry *)alloc(sizeof(*ret));
+	memcpy(ret, entry, sizeof(*ret));
+
+	// Acknowledge completion
+	uint32_t *doorbell = (uint32_t *)CQnHDBL(state->properties, entry->sq_ident);
+
+	size_t delta = index - qpair->comp_doorbell;
+	while (delta != 0) {
+		delta = index - qpair->comp_doorbell;
+	}
+
+	size_t val = ARC_ATOMIC_INC(qpair->comp_doorbell);
+
+	qpair->comp_doorbell = val % qpair->comp_len;
+	*doorbell = qpair->comp_doorbell;
+
+	printf("%d\n", qpair->sub_doorbell);
+
+	return ret;
+}
+
+// TODO: Implement interrupt handler for IO queue completion signalling
 
 static void *identify_queue(struct driver_state *state, uint8_t cns, int queue) {
 	void *buffer = pmm_alloc();
@@ -162,7 +245,8 @@ static void *identify_queue(struct driver_state *state, uint8_t cns, int queue) 
 		return NULL;
 	}
 
-	// TODO: Wait for completion
+	// TODO: Check status
+	poll_completion_queue(state, &cmd);
 
 	return buffer;
 }
@@ -174,11 +258,6 @@ static int configure_controller(struct driver_state *state) {
 	}
 
 	uint8_t *controller_conf = identify_queue(state, 0x1, ADMIN_QUEUE);
-
-	for (int i = 0; i < PAGE_SIZE; i++) {
-		printf("%02X ", *(controller_conf + i));
-	}
-	printf("\n");
 
 	if (controller_conf == NULL) {
 		ARC_DEBUG(ERR, "Failed to configure, returned controller configuration is NULL\n");
@@ -213,14 +292,33 @@ static int configure_controller(struct driver_state *state) {
 		.cdw11 = 64 | (64 << 16)
         };
 	submit_queue_command(state, &cmd, ADMIN_QUEUE);
+	poll_completion_queue(state, &cmd);
 
 	// Check to see how many we got
 	cmd.cdw0.opcode = 0xA;
 	cmd.cdw10 = 0x7;
 
 	submit_queue_command(state, &cmd, ADMIN_QUEUE);
+	struct qc_entry *res = poll_completion_queue(state, &cmd);
 
-	state->max_queue_count = min(0, 0);
+	state->max_ioqpair_count = min(res->dw0 & 0xFFFF, (res->dw0 >> 16) & 0xFFFF) + 1;
+
+	free(res);
+
+	// Configure the command set
+	if ((state->properties->cap.css >> 6) & 1) {
+		uint8_t *command_sets = identify_queue(state, 0x1C, ADMIN_QUEUE);
+
+		for (int i = 0; i < PAGE_SIZE; i++) {
+			printf("%02X ", *(command_sets + i));
+		}
+		printf("\n");
+
+		if (command_sets == NULL) {
+			// TODO: Error handle
+			return -1;
+		}
+	}
 
 	return 0;
 }
@@ -253,7 +351,7 @@ static int reset_controller(struct driver_state *state) {
 
 	memset(queues, 0, PAGE_SIZE * 2);
 	properties->asq = ARC_HHDM_TO_PHYS(queues);
-	properties->acq = ARC_HHDM_TO_PHYS(queues) + 0x1000;
+	properties->acq = ARC_HHDM_TO_PHYS(queues) + PAGE_SIZE;
 	*(uint32_t *)((uintptr_t)properties + 0x24) = 63 | (0xFF << 16);
 
 	state->admin_entry = create_qpair(state, ARC_PHYS_TO_HHDM(properties->asq), properties->aqa.asqs + 1, ARC_PHYS_TO_HHDM(properties->acq), properties->aqa.acqs + 1);
@@ -307,25 +405,26 @@ static int create_io_queue(struct driver_state *state, uint16_t command_set, uin
 		return -1;
 	}
 
-	// Create submission queue
+	// Create completion queue
 	struct qs_entry cmd = {
-	        .cdw0.opcode = 0x01,
-	        .prp.entry1 = sub,
-		.cdw10 = entry->id | (sub_len << 16),
-		.cdw11 = 0b111 | (entry->id << 16),
-		.cdw12 = command_set
+	        .cdw0.opcode = 0x05,
+		.prp.entry1 = comp,
+		.cdw10 = entry->id | (comp_len << 16),
+	        .cdw11 = 0b1 | ((interrupt > 31) << 1) | ((interrupt & 0xFFFF) << 16),
 	};
 
 	submit_queue_command(state, &cmd, ADMIN_QUEUE);
+	poll_completion_queue(state, &cmd);
 
-	// Create completion queue
-	cmd.cdw0.opcode = 0x05;
-	cmd.prp.entry1 = comp;
-	cmd.cdw10 = entry->id | (comp_len << 16);
-	cmd.cdw11 = 0b1 | ((interrupt > 31) << 1) | ((interrupt & 0xFFFF) << 16);
-	cmd.cdw12 = 0;
+	// Create submission queue
+	cmd.cdw0.opcode = 0x01;
+	cmd.prp.entry1 = sub;
+	cmd.cdw10 = entry->id | (sub_len << 16);
+	cmd.cdw11 = 0b111 | (entry->id << 16);
+	cmd.cdw12 = command_set;
 
 	submit_queue_command(state, &cmd, ADMIN_QUEUE);
+	poll_completion_queue(state, &cmd);
 
 	return entry->id;
 }
@@ -383,10 +482,21 @@ int init_nvme(struct ARC_Resource *res, void *arg) {
 		return -1;
 	}
 
+	init_static_mutex(&state->qpair_lock);
+
 	state->properties = properties;
 	res->driver_state = state;
 
 	reset_controller(state);
+
+	create_io_queue(state, 5, 0);
+	uint8_t *data = identify_queue(state, 0x1, 0);
+	if (data != NULL) {
+		for (int i = 0; i < PAGE_SIZE; i++) {
+			printf("%02X ", *(data + i));
+		}
+		printf("\n");
+	}
 
 	return 0;
 }
