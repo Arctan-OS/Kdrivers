@@ -31,75 +31,22 @@
 #include <stddef.h>
 #include <global.h>
 
-#define SQnTDBL(__properties, __n) ((uintptr_t)__properties->data + ((2 * (__n)) * (4 << __properties->cap.dstrd)))
-#define CQnHDBL(__properties, __n) ((uintptr_t)__properties->data + ((2 * (__n) + 1) * (4 << __properties->cap.dstrd)))
+#define SQnTDBL(__properties, __n) ((uintptr_t)__properties->data + ((2 * (__n)) * (4 << MASKED_READ(__properties->cap, 32, 0b1111))))
+#define CQnHDBL(__properties, __n) ((uintptr_t)__properties->data + ((2 * (__n) + 1) * (4 << MASKED_READ(__properties->cap, 32, 0b1111))))
 #define ADMIN_QUEUE -1
+#define ADMIN_QUEUE_SUB_LEN 64
+#define ADMIN_QUEUE_COMP_LEN 256
 
 struct controller_properties {
-	struct {
-		uint16_t mqes : 16;
-		uint8_t cqr : 1;
-		uint8_t ams : 2;
-		uint8_t resv0 : 5;
-		uint8_t to : 8;
-		uint8_t dstrd : 4;
-		uint8_t nssrs : 1;
-		uint8_t css : 8;
-		uint8_t bps : 1;
-		uint8_t cps : 2;
-		uint8_t mpsmin : 4;
-		uint8_t mpsmax : 4;
-		uint8_t pmrs : 1;
-		uint8_t cmbs : 1;
-		uint8_t nsss : 1;
-		uint8_t crms : 2;
-		uint8_t nsses : 1;
-		uint8_t resv1 : 2;
-	}__attribute__((packed)) cap;
-
-	struct {
-		uint8_t tmp;
-		uint8_t min;
-		uint16_t maj;
-	}__attribute__((packed)) vs;
-
+	uint64_t cap;
+	uint32_t vs;
 	uint32_t intms;
 	uint32_t intmc;
-
-	struct  {
-		uint8_t en : 1;
-		uint8_t resv0 : 3;
-		uint8_t css : 3;
-		uint8_t mps : 4;
-		uint8_t ams : 3;
-		uint8_t shn : 2;
-		uint8_t iosqes : 4;
-		uint8_t iocqes : 4;
-		uint8_t crime : 1;
-		uint16_t resv1 : 7;
-	}__attribute__((packed)) cc;
-
+	uint32_t cc;
 	uint32_t resv0;
-
-	struct {
-		uint8_t rdy : 1;
-		uint8_t cfs : 1;
-		uint8_t shst : 2;
-		uint8_t nssro :  1;
-		uint8_t pp : 1;
-		uint8_t st : 1;
-		uint32_t resv0 : 25;
-	}__attribute__((packed)) csts;
-
+	uint32_t csts;
 	uint32_t nssr;
-
-	struct {
-		uint16_t asqs : 12;
-		uint8_t resv0 : 4;
-		uint16_t acqs : 12;
-		uint8_t resv1 : 4;
-	}__attribute__((packed)) aqa;
-
+	uint32_t aqa;
 	uint64_t asq;
 	uint64_t acq;
 	uint32_t cmbloc;

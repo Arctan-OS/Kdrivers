@@ -83,6 +83,7 @@ static struct qpair_list_entry *create_qpair(struct driver_state *state, uintptr
 	}
 
 	mutex_lock(&state->qpair_lock);
+
 	entry->id = __builtin_ffs(state->id_bmp) - 1;
 	state->id_bmp &= ~(1 << entry->id);
 	entry->sub = (struct qs_entry *)sub;
@@ -218,8 +219,6 @@ static struct qc_entry *poll_completion_queue(struct driver_state *state, struct
 	qpair->comp_doorbell = val % qpair->comp_len;
 	*doorbell = qpair->comp_doorbell;
 
-	printf("%d\n", qpair->sub_doorbell);
-
 	return ret;
 }
 
@@ -285,6 +284,9 @@ static int configure_controller(struct driver_state *state) {
 
 	// TODO: CRDTs
 
+	MASKED_WRITE(state->properties->cc, 6, 16, 0b1111);
+	MASKED_WRITE(state->properties->cc, 4, 20, 0b1111);
+
 	// Request 64 IO completion and
 	struct qs_entry cmd = {
 	        .cdw0.opcode = 0x9,
@@ -292,21 +294,16 @@ static int configure_controller(struct driver_state *state) {
 		.cdw11 = 64 | (64 << 16)
         };
 	submit_queue_command(state, &cmd, ADMIN_QUEUE);
-	poll_completion_queue(state, &cmd);
-
-	// Check to see how many we got
-	cmd.cdw0.opcode = 0xA;
-	cmd.cdw10 = 0x7;
-
-	submit_queue_command(state, &cmd, ADMIN_QUEUE);
 	struct qc_entry *res = poll_completion_queue(state, &cmd);
 
 	state->max_ioqpair_count = min(res->dw0 & 0xFFFF, (res->dw0 >> 16) & 0xFFFF) + 1;
 
+	printf("%d\n", state->max_ioqpair_count);
+
 	free(res);
 
 	// Configure the command set
-	if ((state->properties->cap.css >> 6) & 1) {
+	if (MASKED_READ(state->properties->cap, 43, 1)) {
 		uint8_t *command_sets = identify_queue(state, 0x1C, ADMIN_QUEUE);
 
 		for (int i = 0; i < PAGE_SIZE; i++) {
@@ -318,6 +315,16 @@ static int configure_controller(struct driver_state *state) {
 			// TODO: Error handle
 			return -1;
 		}
+
+		// Select command set
+		struct qs_entry sel_cmd = {
+	                .cdw0.opcode = 0x9,
+			.cdw10 = 0x19,
+			.cdw11 = 5
+                };
+
+		submit_queue_command(state, &sel_cmd, ADMIN_QUEUE);
+		poll_completion_queue(state, &sel_cmd);
 	}
 
 	return 0;
@@ -331,9 +338,9 @@ static int reset_controller(struct driver_state *state) {
 
 	struct controller_properties *properties = state->properties;
 
-	properties->cc.en = 0;
+	MASKED_WRITE(properties->cc, 0, 0, 1);
 
-	while (properties->csts.rdy);
+	while (MASKED_READ(properties->csts, 0, 1));
 
 	// Create adminstrator queue
 	void *queues = pmm_contig_alloc(2);
@@ -352,9 +359,11 @@ static int reset_controller(struct driver_state *state) {
 	memset(queues, 0, PAGE_SIZE * 2);
 	properties->asq = ARC_HHDM_TO_PHYS(queues);
 	properties->acq = ARC_HHDM_TO_PHYS(queues) + PAGE_SIZE;
-	*(uint32_t *)((uintptr_t)properties + 0x24) = 63 | (0xFF << 16);
 
-	state->admin_entry = create_qpair(state, ARC_PHYS_TO_HHDM(properties->asq), properties->aqa.asqs + 1, ARC_PHYS_TO_HHDM(properties->acq), properties->aqa.acqs + 1);
+	MASKED_WRITE(properties->aqa, ADMIN_QUEUE_SUB_LEN - 1, 0, 0xFFF);
+	MASKED_WRITE(properties->aqa, ADMIN_QUEUE_COMP_LEN - 1, 16, 0xFFF);
+
+	state->admin_entry = create_qpair(state, ARC_PHYS_TO_HHDM(properties->asq), ADMIN_QUEUE_SUB_LEN, ARC_PHYS_TO_HHDM(properties->acq), ADMIN_QUEUE_SUB_LEN);
 
 	if (state->admin_entry == NULL) {
 		ARC_DEBUG(ERR, "Failed to create adminstrator queue pair\n");
@@ -365,20 +374,23 @@ static int reset_controller(struct driver_state *state) {
 	state->id_bmp = -1;
 	state->admin_entry->id = -1;
 
-	if ((properties->cap.css >> 7) & 1) {
-		properties->cc.css = 0b111;
-	} else if ((properties->cap.css >> 6) & 1) {
-		properties->cc.css = 0b110;
+	uint8_t cap_css = MASKED_READ(properties->cap, 37, 0xFF);
+
+	if ((cap_css >> 7) & 1) {
+		MASKED_WRITE(properties->cc, 0b111, 4, 0b111);
+	} else if ((cap_css >> 6) & 1) {
+		MASKED_WRITE(properties->cc, 0b110, 4, 0b111);
 	} else {
-		properties->cc.css = 0;
+		MASKED_WRITE(properties->cc, 0b000, 4, 0b111);
 	}
 
-	properties->cc.ams = 0;
-	properties->cc.mps = 0;
+	MASKED_WRITE(properties->cc, 0, 7, 0b1111);
+	MASKED_WRITE(properties->cc, 0, 11, 0b111);
 
-	properties->cc.en = 1;
+	MASKED_WRITE(properties->cc, 1, 0, 1);
 
-	while (!properties->csts.rdy);
+	// TODO: Add something to do here like __asm__("pause")
+	while (!MASKED_READ(properties->csts, 0, 1));
 
 	state->flags |= 1;
 
@@ -390,7 +402,7 @@ static int create_io_queue(struct driver_state *state, uint16_t command_set, uin
 		return 0;
 	}
 
-	const int qpages = 3;
+	const int qpages = 2;
 	void *queues = pmm_contig_alloc(qpages);
 	uintptr_t sub = ARC_HHDM_TO_PHYS(queues);
 	uintptr_t comp = sub + ((qpages - 1) * PAGE_SIZE);
@@ -399,6 +411,8 @@ static int create_io_queue(struct driver_state *state, uint16_t command_set, uin
 	size_t comp_len = ((qpages - (qpages - 1)) * PAGE_SIZE) / sizeof(struct qs_entry);
 
 	struct qpair_list_entry *entry = create_qpair(state, ARC_PHYS_TO_HHDM(sub), sub_len, ARC_PHYS_TO_HHDM(comp), comp_len);
+
+	uint16_t real_qid = entry->id + 1;
 
 	if (entry == NULL) {
 		pmm_contig_free(queues, qpages);
@@ -409,22 +423,25 @@ static int create_io_queue(struct driver_state *state, uint16_t command_set, uin
 	struct qs_entry cmd = {
 	        .cdw0.opcode = 0x05,
 		.prp.entry1 = comp,
-		.cdw10 = entry->id | (comp_len << 16),
+		.cdw10 = real_qid | (comp_len << 16),
 	        .cdw11 = 0b1 | ((interrupt > 31) << 1) | ((interrupt & 0xFFFF) << 16),
 	};
 
 	submit_queue_command(state, &cmd, ADMIN_QUEUE);
-	poll_completion_queue(state, &cmd);
+	struct qc_entry *cres = poll_completion_queue(state, &cmd);
+	printf("Queue creation status: %x\n", cres->status);
 
 	// Create submission queue
 	cmd.cdw0.opcode = 0x01;
 	cmd.prp.entry1 = sub;
-	cmd.cdw10 = entry->id | (sub_len << 16);
-	cmd.cdw11 = 0b111 | (entry->id << 16);
+	cmd.cdw10 = real_qid | (sub_len << 16);
+	cmd.cdw11 = 0b111 | (real_qid << 16);
 	cmd.cdw12 = command_set;
 
 	submit_queue_command(state, &cmd, ADMIN_QUEUE);
-	poll_completion_queue(state, &cmd);
+	struct qc_entry *sres = poll_completion_queue(state, &cmd);
+
+	printf("Queue creation status: %x\n", sres->status);
 
 	return entry->id;
 }
@@ -489,14 +506,7 @@ int init_nvme(struct ARC_Resource *res, void *arg) {
 
 	reset_controller(state);
 
-	create_io_queue(state, 5, 0);
-	uint8_t *data = identify_queue(state, 0x1, 0);
-	if (data != NULL) {
-		for (int i = 0; i < PAGE_SIZE; i++) {
-			printf("%02X ", *(data + i));
-		}
-		printf("\n");
-	}
+	create_io_queue(state, 0, 0);
 
 	return 0;
 }
@@ -506,13 +516,23 @@ int uninit_nvme() {
 };
 
 int read_nvme(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
-	(void)buffer;
-	(void)size;
-	(void)count;
-	(void)file;
-	(void)res;
+	if (buffer == NULL || size == 0 || count == 0 || file == NULL || res == NULL) {
+		return 0;
+	}
 
-	return 0;
+	uint8_t *meta = pmm_alloc();
+
+	struct qs_entry cmd = {
+	        .cdw0.opcode = 0x2,
+		.prp.entry1 = ARC_HHDM_TO_PHYS(buffer),
+                .mptr = ARC_HHDM_TO_PHYS(meta),
+        };
+
+	submit_queue_command(res->driver_state, &cmd, 0);
+	struct qc_entry *comp = poll_completion_queue(res->driver_state, &cmd);
+	printf("%x\n", comp->status);
+
+	return 1;
 }
 
 int write_nvme(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
