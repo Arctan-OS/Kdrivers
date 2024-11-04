@@ -24,12 +24,13 @@
  *
  * @DESCRIPTION
 */
-#ifndef ARC_DRIVERS_DEV_NVME_H
-#define ARC_DRIVERS_DEV_NVME_H
+#ifndef ARC_DRIVERS_DEV_NVME_NVME_H
+#define ARC_DRIVERS_DEV_NVME_NVME_H
 
 #include <stdint.h>
 #include <stddef.h>
 #include <global.h>
+#include <lib/ringbuffer.h>
 
 #define SQnTDBL(__properties, __n) ((uintptr_t)__properties->data + ((2 * (__n)) * (4 << MASKED_READ(__properties->cap, 32, 0b1111))))
 #define CQnHDBL(__properties, __n) ((uintptr_t)__properties->data + ((2 * (__n) + 1) * (4 << MASKED_READ(__properties->cap, 32, 0b1111))))
@@ -112,5 +113,39 @@ struct qc_entry {
 	uint16_t status : 15;
 }__attribute__((packed));
 STATIC_ASSERT(sizeof(struct qc_entry) == 16, "Completeion Queue Entry Size mismatch");
+
+struct controller_state {
+	struct controller_properties *properties;
+	uint32_t flags; // Bit | Description
+			// 0   | 1: Kernel Initialized
+	struct qpair_list_entry *list;
+	struct qpair_list_entry *admin_entry;
+	uint64_t id_bmp;
+	size_t max_ioqpair_count;
+	size_t max_transfer_size;
+	ARC_GenericMutex qpair_lock;
+	uint32_t ctratt;
+	uint32_t controller_version;
+	uint32_t domain;
+	uint16_t controller_id;
+	uint8_t controller_type;
+};
+
+struct qpair_list_entry {
+	struct ARC_Ringbuffer *submission_queue;
+	struct ARC_Ringbuffer *completion_queue;
+	struct qpair_list_entry *next;
+	int phase;
+	int id;
+};
+
+int nvme_submit_command(struct controller_state *state, int queue, struct qs_entry *cmd);
+int nvme_poll_completion(struct controller_state *state, struct qs_entry *cmd, struct qc_entry *ret);
+
+struct qpair_list_entry *nvme_create_qpair(struct controller_state *state, uintptr_t sub, size_t sub_len, uintptr_t comp, size_t comp_len);
+int nvme_delete_qpair(struct qpair_list_entry *qpair);
+int nvme_delete_all_qpairs(struct controller_state *state);
+
+int nvme_delete_queue_pair();
 
 #endif
