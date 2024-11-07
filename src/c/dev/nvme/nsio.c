@@ -58,7 +58,7 @@ int write_nvme_ns_io(void *buffer, size_t size, size_t count, struct ARC_File *f
 }
 
 ARC_REGISTER_DRIVER(3, nvme_ns_io_driver) = {
-        .index = 0,
+        .index = 1,
 	.instance_counter = 0,
 	.name_format = "%sn%d",
         .init = init_nvme_ns_io,

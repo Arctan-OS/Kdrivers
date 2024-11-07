@@ -71,6 +71,7 @@ int nvme_pci_poll_completion(struct controller_state *state, struct qs_entry *cm
 
 	struct qpair_list_entry *qpair = state->admin_entry;
 	int qpair_id = (cmd->cdw0.cid >> 15) & 1 ? ADMIN_QUEUE : cmd->cdw0.cid & 0x3F;
+	int cmd_idx = (qpair_id == ADMIN_QUEUE) ? (cmd->cdw0.cid) : (cmd->cdw0.cid >> 6) & 0xFF;
 
 	if (qpair_id != ADMIN_QUEUE) {
 		qpair = state->list;
@@ -107,6 +108,8 @@ int nvme_pci_poll_completion(struct controller_state *state, struct qs_entry *cm
 	uint32_t *doorbell = (uint32_t *)CQnHDBL(state->properties, qpair_id + 1);
 	*doorbell = ((uint32_t)idx) + 1;
 
+	ringbuffer_free(qpair->submission_queue, cmd_idx);
+
 	return 0;
 }
 
@@ -124,27 +127,6 @@ static int configure_controller(struct controller_state *state) {
 		ARC_DEBUG(ERR, "Failed to configure, returned controller configuration is NULL\n");
 		return -1;
 	}
-
-	// 77    Maximum Data Transfer Size in 2 << cap.mpsmin
-	//       CTRATT mem bit cleared, includes the size of the interleaved metadata
-	//       mem bit set then this is size of user data only
-	state->max_transfer_size = controller_conf[77];
-
-	// 79:78 CNTLID
-	state->controller_id = *(uint16_t *)(&controller_conf[78]);
-
-	// 83:80 VERS
-	state->controller_version = *(uint32_t *)(&controller_conf[80]);
-
-	// 99:96 CTRATT bit 16 is MEM for 77
-	//              bit 11 is multi-domain subsystem
-	//              bit 10 UUID list 1: supported
-	state->ctratt = *(uint32_t *)(&controller_conf[96]);
-
-	// 111   Controller type (0: resv, 1: IO, 2: discovery, 3 ADMIN, all else resv)
-	state->controller_type = controller_conf[111];
-
-	// TODO: CRDTs
 
 	// Configure the command set
 	if (MASKED_READ(state->properties->cap, 43, 1)) {
@@ -342,23 +324,7 @@ int init_nvme_pci(struct controller_state *state, struct ARC_PCIHeader *header) 
 
 	reset_controller(state);
 
-	// Identify
-	uint8_t *data = pmm_alloc();
-	struct qs_entry cmd = {
-	        .cdw0.opcode = 0x6,
-		.prp.entry1 = ARC_HHDM_TO_PHYS(data),
-		.cdw10 = (state->controller_id << 16) | 0x1,
-		.cdw11 = 0
-        };
 
-	nvme_submit_command(state, ADMIN_QUEUE, &cmd);
-	nvme_poll_completion(state, &cmd, NULL);
-
-	printf("Data:\n");
-	for (int i = 0; i < PAGE_SIZE; i++) {
-		printf("%02X ", *(data + i));
-	}
-	printf("\n");
 
 	return 0;
 }

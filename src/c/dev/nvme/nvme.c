@@ -30,6 +30,7 @@
 #include <lib/ringbuffer.h>
 #include <lib/util.h>
 #include <drivers/dri_defs.h>
+#include <mm/pmm.h>
 
 struct driver_state {
 	struct controller_state *controller_state;
@@ -42,10 +43,6 @@ int nvme_submit_command(struct controller_state *state, int queue, struct qs_ent
 
 int nvme_poll_completion(struct controller_state *state, struct qs_entry *cmd, struct qc_entry *ret) {
 	return nvme_pci_poll_completion(state, cmd, ret);
-}
-
-int empty_nvme() {
-	return 0;
 }
 
 struct qpair_list_entry *nvme_create_qpair(struct controller_state *state, uintptr_t sub, size_t sub_len, uintptr_t comp, size_t comp_len) {
@@ -78,19 +75,152 @@ struct qpair_list_entry *nvme_create_qpair(struct controller_state *state, uintp
 }
 
 int nvme_delete_qpair(struct qpair_list_entry *qpair) {
-	(void)qpair;
+	if (qpair == NULL) {
+		return -1;
+	}
+
 	ARC_DEBUG(WARN, "Implement\n");
 
 	return 0;
 }
 
 int nvme_delete_all_qpairs(struct controller_state *state) {
+	if (state == NULL) {
+		return -1;
+	}
+
 	state->id_bmp = -1;
 	ARC_DEBUG(WARN, "Implement\n");
 
 	return 0;
 }
 
+uint64_t nvme_set_command_set(struct controller_state *state) {
+	if (state == NULL || (state->flags & 1) == 0) {
+		return -1;
+	}
+
+	uint64_t cap = state->properties->cap;
+	uint64_t cc = state->properties->cc;
+
+	if (MASKED_READ(cap, 43, 1) == 1) {
+		// CAP.CSS.IOCSS not set
+		uint64_t *iocs_struct = (uint64_t *)pmm_alloc();
+
+		struct qs_entry iocs_struct_cmd = {
+	                .cdw0.opcode = 0x6,
+			.prp.entry1 = ARC_HHDM_TO_PHYS(iocs_struct),
+	                .cdw10 = 0x1C | (state->controller_id << 16),
+                };
+
+		nvme_submit_command(state, ADMIN_QUEUE, &iocs_struct_cmd);
+		nvme_poll_completion(state, &iocs_struct_cmd, NULL);
+
+		int i = 0;
+		uint64_t enabled_cmd_sets = 0;
+
+		for (; i < 512; i++) {
+			if (iocs_struct[i] != 0) {
+				enabled_cmd_sets = iocs_struct[i];
+				break;
+			}
+		}
+
+		pmm_free(iocs_struct);
+
+		struct qs_entry set_cmd = {
+		        .cdw0.opcode = 0x9,
+			.cdw10 = 0x19,
+			.cdw11 = i & 0xFF,
+	        };
+
+		nvme_submit_command(state, ADMIN_QUEUE, &set_cmd);
+		struct qc_entry set_ret = { 0 };
+		nvme_poll_completion(state, &set_cmd, &set_ret);
+
+		if ((set_ret.dw0 & 0xFF) != i) {
+			ARC_DEBUG(ERR, "Command set not set to desired command set (TODO)\n");
+		}
+
+		return enabled_cmd_sets;
+	} else if (MASKED_READ(cc, 1, 0b111) == 0) {
+		// NVM Command Set is enabled
+		return 0x1;
+	}
+
+	return 0;
+}
+
+int nvme_enumerate_enabled_command_sets(struct controller_state *state, uint64_t command_sets, uint64_t dri_instance) {
+	while (command_sets != 0) {
+		int idx = __builtin_ffs(command_sets) - 1;
+
+		uint64_t *namespaces = (uint64_t *)pmm_alloc();
+
+		struct qs_entry get_ns_cmd = {
+	                .cdw0.opcode = 0x6,
+			.prp.entry1 = ARC_HHDM_TO_PHYS(namespaces),
+	                .cdw10 = 0x7 | (state->controller_id << 16),
+			.cdw11 = (idx & 0xFF) << 24,
+			.nsid = 0x0,
+                };
+
+		nvme_submit_command(state, ADMIN_QUEUE, &get_ns_cmd);
+		nvme_poll_completion(state, &get_ns_cmd, NULL);
+
+		for (int i = 0; i < 512; i++) {
+			// TODO: Initialize namespace drivers
+		}
+
+		pmm_free(namespaces);
+
+		command_sets &= ~(1 << (idx));
+	}
+	return 0;
+}
+
+int nvme_identify_controller(struct controller_state *state) {
+	if (state == NULL || (state->flags & 1) == 0) {
+		return -1;
+	}
+
+	uint8_t *data = (uint8_t *)pmm_alloc();
+
+	struct qs_entry cmd = {
+	        .cdw0.opcode = 0x6,
+		.prp.entry1 = ARC_HHDM_TO_PHYS(data),
+		.cdw10 = 0x1,
+        };
+
+	nvme_submit_command(state, ADMIN_QUEUE, &cmd);
+	struct qc_entry ret = { 0 };
+	nvme_poll_completion(state, &cmd, &ret);
+
+	// 77    Maximum Data Transfer Size in 2 << cap.mpsmin
+	//       CTRATT mem bit cleared, includes the size of the interleaved metadata
+	//       mem bit set then this is size of user data only
+	state->max_transfer_size = data[77];
+
+	// 79:78 CNTLID
+	state->controller_id = *(uint16_t *)(&data[78]);
+
+	// 83:80 VERS
+	state->controller_version = *(uint32_t *)(&data[80]);
+
+	// 99:96 CTRATT bit 16 is MEM for 77
+	//              bit 11 is multi-domain subsystem
+	//              bit 10 UUID list 1: supported
+	state->ctratt = *(uint32_t *)(&data[96]);
+
+	// 111   Controller type (0: resv, 1: IO, 2: discovery, 3 ADMIN, all else resv)
+	state->controller_type = data[111];
+
+	// TODO: CRDTs
+
+	pmm_free(data);
+
+	return 0;
+}
 
 int init_nvme(struct ARC_Resource *res, void *arg) {
 	if (res == NULL || arg == NULL) {
@@ -115,7 +245,12 @@ int init_nvme(struct ARC_Resource *res, void *arg) {
 	dri->res = res;
 	res->driver_state = dri;
 
-	return init_nvme_pci(cntrl, arg);
+	init_nvme_pci(cntrl, arg);
+	nvme_identify_controller(cntrl);
+	uint64_t enabled_command_sets = nvme_set_command_set(cntrl);
+	nvme_enumerate_enabled_command_sets(cntrl, enabled_command_sets, res->instance);
+
+	return 0;
 }
 
 int uninit_nvme() {
@@ -127,8 +262,6 @@ int read_nvme(void *buffer, size_t size, size_t count, struct ARC_File *file, st
 		return 0;
 	}
 
-	printf("Definitely reading\n");
-
 	return 1;
 }
 
@@ -139,6 +272,10 @@ int write_nvme(void *buffer, size_t size, size_t count, struct ARC_File *file, s
 	(void)file;
 	(void)res;
 
+	return 0;
+}
+
+int empty_nvme() {
 	return 0;
 }
 
