@@ -39,6 +39,7 @@ int nvme_pci_submit_command(struct controller_state *state, int queue, struct qs
 	if (queue != ADMIN_QUEUE) {
 		qpair = state->list;
 		while (qpair != NULL && qpair->id != queue) {
+			printf("%d\n", qpair->id);
 			qpair = qpair->next;
 		}
 	}
@@ -47,7 +48,6 @@ int nvme_pci_submit_command(struct controller_state *state, int queue, struct qs
 		return -2;
 	}
 
-
 	size_t ptr = ringbuffer_allocate(qpair->submission_queue, 1);
 
 	if (queue == ADMIN_QUEUE) {
@@ -55,6 +55,7 @@ int nvme_pci_submit_command(struct controller_state *state, int queue, struct qs
 	} else {
 		cmd->cdw0.cid = (queue & 0x3F) | ((ptr & 0xFF) << 6);
 	}
+
 
 	ringbuffer_write(qpair->submission_queue, ptr, cmd);
 
@@ -95,8 +96,10 @@ int nvme_pci_poll_completion(struct controller_state *state, struct qs_entry *cm
 		}
 	}
 
+	int status = qc[i].status;
+
 	if (ret != NULL) {
-		memcpy(ret, &qpair->completion_queue[i], sizeof(*ret));
+		memcpy(ret, &qc[i], sizeof(*ret));
 	}
 
 	size_t idx = ringbuffer_allocate(qpair->completion_queue, 1);
@@ -110,103 +113,8 @@ int nvme_pci_poll_completion(struct controller_state *state, struct qs_entry *cm
 
 	ringbuffer_free(qpair->submission_queue, cmd_idx);
 
-	return 0;
+	return status;
 }
-
-/*
-**
-static int configure_controller(struct controller_state *state) {
-	if (state == NULL || !(state->flags & 1)) {
-		ARC_DEBUG(ERR, "Cannot configure controller, either not initialized or state does not exist\n");
-		return -1;
-	}
-
-	uint8_t *controller_conf = identify_queue(state, ADMIN_QUEUE, 0x1, 0, 0);
-
-	if (controller_conf == NULL) {
-		ARC_DEBUG(ERR, "Failed to configure, returned controller configuration is NULL\n");
-		return -1;
-	}
-
-	// Configure the command set
-	if (MASKED_READ(state->properties->cap, 43, 1)) {
-		uint64_t *command_sets = identify_queue(state, ADMIN_QUEUE, 0x1C, 0, 0);
-
-		for (int i = 0; i < PAGE_SIZE; i++) {
-			printf("%02X ", *(command_sets + i));
-		}
-		printf("\n");
-
-		if (command_sets == NULL) {
-			// TODO: Error handle
-			return -1;
-		}
-
-		// Select command set
-		// TODO: Maybe specify a desired vector?
-		int index = 0;
-		struct qs_entry sel_cmd = {
-	                .cdw0.opcode = 0x9,
-			.cdw10 = 0x19,
-			.cdw11 = index
-                };
-
-		submit_queue_command(state, &sel_cmd, ADMIN_QUEUE);
-		poll_completion_queue(state, &sel_cmd);
-
-		uint64_t command_set_vec = command_sets[index];
-
-		while (command_set_vec != 0) {
-			int supported_command_set = __builtin_ffs(command_set_vec) - 1;
-
-			uint32_t *cns7 = identify_queue(state, ADMIN_QUEUE, 7, (supported_command_set << 24), 0);
-			printf("NSIDs\n");
-			for (int i = 0; i < PAGE_SIZE; i++) {
-				printf("%02X ", *(cns7 + i));
-			}
-			printf("\n");
-			int nsid_counter = 0;
-			while (cns7[nsid_counter]) {
-				// If statement for I/O command sets based on NVM Command Set
-				printf(">NSID: %d\n", cns7[nsid_counter]);
-
-				if (supported_command_set == 0 || supported_command_set == 2) {
- 					identify_queue(state, ADMIN_QUEUE, 0, 0, nsid_counter + 1);
-				}
-
-				nsid_counter++;
-			}
-
-			pmm_free(cns7);
-
-
-			command_set_vec &= ~(1 << (supported_command_set));
-		}
-	} else {
-		// TODO: Do another thing
-	}
-
-	MASKED_WRITE(state->properties->cc, 6, 16, 0b1111);
-	MASKED_WRITE(state->properties->cc, 4, 20, 0b1111);
-
-	// Request 64 IO completion and
-	struct qs_entry cmd = {
-	        .cdw0.opcode = 0x9,
-	        .cdw10 = 0x7,
-		.cdw11 = 64 | (64 << 16)
-        };
-	submit_queue_command(state, &cmd, ADMIN_QUEUE);
-	struct qc_entry *res = poll_completion_queue(state, &cmd);
-
-	state->max_ioqpair_count = min(res->dw0 & 0xFFFF, (res->dw0 >> 16) & 0xFFFF) + 1;
-
-	printf("%d\n", state->max_ioqpair_count);
-
-	free(res);
-
-	return 0;
-}
-*/
 
 static int reset_controller(struct controller_state *state) {
 	if (state == NULL || state->properties == NULL) {
@@ -304,8 +212,6 @@ int init_nvme_pci(struct controller_state *state, struct ARC_PCIHeader *header) 
 		}
 	}
 
-	printf("%"PRIx64"\n", mem_registers_base);
-
 	struct controller_properties *properties = (struct controller_properties *)ARC_PHYS_TO_HHDM(mem_registers_base);
 
 	if (properties == NULL) {
@@ -323,8 +229,6 @@ int init_nvme_pci(struct controller_state *state, struct ARC_PCIHeader *header) 
 	state->properties = properties;
 
 	reset_controller(state);
-
-
 
 	return 0;
 }

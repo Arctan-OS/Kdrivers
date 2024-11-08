@@ -47,6 +47,7 @@
 #define ARC_DRI_DEV 0x3
 // Indices within devices group
 #define ARC_DRI_NVME 0x0
+#define ARC_DRI_NVME_NS 0x1
 
 #define ARC_DRI_PCI_TERMINATOR 0xFFFFFFFF
 

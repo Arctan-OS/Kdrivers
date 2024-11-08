@@ -25,6 +25,7 @@
  * @DESCRIPTION
 */
 #include <drivers/dev/nvme/nvme.h>
+#include <drivers/dev/nvme/namespace.h>
 #include <drivers/dev/nvme/pci.h>
 #include <mm/allocator.h>
 #include <lib/ringbuffer.h>
@@ -60,12 +61,11 @@ struct qpair_list_entry *nvme_create_qpair(struct controller_state *state, uintp
 
 	entry->id = __builtin_ffs(state->id_bmp) - 1;
 	state->id_bmp &= ~(1 << entry->id);
-	entry->next = state->list;
 	entry->submission_queue = init_ringbuffer((void *)sub, sub_len, sizeof(struct qs_entry));
 	entry->completion_queue = init_ringbuffer((void *)comp, comp_len, sizeof(struct qc_entry));
 	entry->phase = 1;
+	entry->next = state->list;
 	state->list = entry;
-
 	mutex_unlock(&state->qpair_lock);
 
 	memset((void *)sub, 0, sub_len);
@@ -91,6 +91,35 @@ int nvme_delete_all_qpairs(struct controller_state *state) {
 
 	state->id_bmp = -1;
 	ARC_DEBUG(WARN, "Implement\n");
+
+	return 0;
+}
+
+int nvme_create_io_qpair(struct controller_state *state, struct qpair_list_entry *qpair, uint8_t nvm_set, int irq) {
+	if (state == NULL || qpair == NULL) {
+		return -1;
+	}
+
+	uint16_t real_id = (uint16_t)qpair->id + 1;
+
+	struct qs_entry cmd = {
+		.cdw0.opcode = 0x5,
+                .prp.entry1 = ARC_HHDM_TO_PHYS(qpair->completion_queue->base),
+		.cdw10 = real_id | ((qpair->completion_queue->objs - 1) << 16),
+		.cdw11 = 1 | ((irq > 31) << 1) | ((irq & 0xFFFF) << 16),
+		.cdw12 = nvm_set
+        };
+
+	nvme_submit_command(state, ADMIN_QUEUE, &cmd);
+	nvme_poll_completion(state, &cmd, NULL);
+
+	cmd.cdw0.opcode = 0x1;
+	cmd.prp.entry1 = ARC_HHDM_TO_PHYS(qpair->submission_queue->base);
+	cmd.cdw10 = real_id | ((qpair->submission_queue->objs - 1) << 16);
+	cmd.cdw11 = 1 | (real_id << 16);
+
+	nvme_submit_command(state, ADMIN_QUEUE, &cmd);
+	nvme_poll_completion(state, &cmd, NULL);
 
 	return 0;
 }
@@ -169,7 +198,24 @@ int nvme_enumerate_enabled_command_sets(struct controller_state *state, uint64_t
 		nvme_poll_completion(state, &get_ns_cmd, NULL);
 
 		for (int i = 0; i < 512; i++) {
-			// TODO: Initialize namespace drivers
+			if (namespaces[i] == 0) {
+				continue;
+			}
+
+			// TODO: Make this dynamic
+			// TODO: Create a configure function for drivers, so that the
+			//       namespace driver can be initialized earlier (using admin cmd 0x2)
+			//       stored in a list and then just configured here
+
+			struct nvme_namespace_dri_args args = {
+				.state = state,
+			        .namespace = namespaces[i],
+				.command_set = idx
+		        };
+
+			vfs_create("/dev/nvme_namespace", 0, ARC_VFS_N_DIR, NULL);
+			struct ARC_Resource *nres = init_resource(ARC_DRI_DEV, ARC_DRI_NVME_NS, &args);
+			vfs_mount("/dev/nvme_namespace", nres);
 		}
 
 		pmm_free(namespaces);
@@ -193,8 +239,7 @@ int nvme_identify_controller(struct controller_state *state) {
         };
 
 	nvme_submit_command(state, ADMIN_QUEUE, &cmd);
-	struct qc_entry ret = { 0 };
-	nvme_poll_completion(state, &cmd, &ret);
+	nvme_poll_completion(state, &cmd, NULL);
 
 	// 77    Maximum Data Transfer Size in 2 << cap.mpsmin
 	//       CTRATT mem bit cleared, includes the size of the interleaved metadata
@@ -218,6 +263,26 @@ int nvme_identify_controller(struct controller_state *state) {
 	// TODO: CRDTs
 
 	pmm_free(data);
+
+	return 0;
+}
+
+int nvme_setup_io_queues(struct controller_state *state) {
+	// Configure IO sub / comp queue sizes
+	MASKED_WRITE(state->properties->cc, 6, 16, 0xF);
+	MASKED_WRITE(state->properties->cc, 4, 20, 0xF);
+
+	// Request 64 IO qpairs
+	struct qs_entry cmd = {
+	        .cdw0.opcode = 0x9,
+		.cdw10 = 0x7,
+		.cdw11 = (64) | (64 << 16)
+        };
+
+	nvme_submit_command(state, ADMIN_QUEUE, &cmd);
+	struct qc_entry ret = { 0 };
+	nvme_poll_completion(state, &cmd, &ret);
+	printf("%x\n", ret.dw0);
 
 	return 0;
 }
@@ -247,6 +312,7 @@ int init_nvme(struct ARC_Resource *res, void *arg) {
 
 	init_nvme_pci(cntrl, arg);
 	nvme_identify_controller(cntrl);
+	nvme_setup_io_queues(cntrl);
 	uint64_t enabled_command_sets = nvme_set_command_set(cntrl);
 	nvme_enumerate_enabled_command_sets(cntrl, enabled_command_sets, res->instance);
 
@@ -255,7 +321,7 @@ int init_nvme(struct ARC_Resource *res, void *arg) {
 
 int uninit_nvme() {
 	return 0;
-};
+}
 
 int read_nvme(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
 	if (buffer == NULL || size == 0 || count == 0 || file == NULL || res == NULL) {

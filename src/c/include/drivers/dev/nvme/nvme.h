@@ -145,6 +145,7 @@ int nvme_poll_completion(struct controller_state *state, struct qs_entry *cmd, s
 struct qpair_list_entry *nvme_create_qpair(struct controller_state *state, uintptr_t sub, size_t sub_len, uintptr_t comp, size_t comp_len);
 int nvme_delete_qpair(struct qpair_list_entry *qpair);
 int nvme_delete_all_qpairs(struct controller_state *state);
+int nvme_create_io_qpair(struct controller_state *state, struct qpair_list_entry *qpair, uint8_t nvm_set, int irq);
 
 int nvme_delete_queue_pair();
 

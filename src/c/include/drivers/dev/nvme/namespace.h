@@ -1,5 +1,5 @@
 /**
- * @file nsio.h
+ * @file namespace.h
  *
  * @author awewsomegamer <awewsomegamer@gmail.com>
  *
@@ -24,13 +24,16 @@
  *
  * @DESCRIPTION
 */
-#ifndef ARC_DRIVERS_DEV_NVME_NSIO_H
-#define ARC_DRIVERS_DEV_NVME_NSIO_H
+#ifndef ARC_DRIVERS_DEV_NVME_NAMESPACE_H
+#define ARC_DRIVERS_DEV_NVME_NAMESPACE_H
 
 #include <stdint.h>
+#include <drivers/dev/nvme/nvme.h>
 
-struct nvme_namespace_state {
-	uint32_t nvm_set;
+struct nvme_namespace_dri_args {
+	struct controller_state *state;
+	int namespace;
+	int command_set;
 };
 
 #endif
