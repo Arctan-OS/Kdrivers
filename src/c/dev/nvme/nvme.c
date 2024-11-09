@@ -262,6 +262,16 @@ int nvme_identify_controller(struct controller_state *state) {
 
 	// TODO: CRDTs
 
+	cmd.cdw10 = 0x2;
+	nvme_submit_command(state, ADMIN_QUEUE, &cmd);
+	nvme_poll_completion(state, &cmd, NULL);
+
+	printf("Active Namespaces:\n");
+	for (int i = 0; i < PAGE_SIZE; i++) {
+		printf("%02X ", *(data + i));
+	}
+	printf("\n");
+
 	pmm_free(data);
 
 	return 0;
@@ -276,7 +286,7 @@ int nvme_setup_io_queues(struct controller_state *state) {
 	struct qs_entry cmd = {
 	        .cdw0.opcode = 0x9,
 		.cdw10 = 0x7,
-		.cdw11 = (64) | (64 << 16)
+		.cdw11 = (63) | (63 << 16)
         };
 
 	nvme_submit_command(state, ADMIN_QUEUE, &cmd);
@@ -313,6 +323,9 @@ int init_nvme(struct ARC_Resource *res, void *arg) {
 	init_nvme_pci(cntrl, arg);
 	nvme_identify_controller(cntrl);
 	nvme_setup_io_queues(cntrl);
+
+	printf("Cntrl: %d\n", cntrl->controller_type);
+
 	uint64_t enabled_command_sets = nvme_set_command_set(cntrl);
 	nvme_enumerate_enabled_command_sets(cntrl, enabled_command_sets, res->instance);
 

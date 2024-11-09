@@ -56,7 +56,6 @@ int nvme_pci_submit_command(struct controller_state *state, int queue, struct qs
 		cmd->cdw0.cid = (queue & 0x3F) | ((ptr & 0xFF) << 6);
 	}
 
-
 	ringbuffer_write(qpair->submission_queue, ptr, cmd);
 
 	uint32_t *doorbell = (uint32_t *)SQnTDBL(state->properties, queue + 1);
@@ -162,11 +161,16 @@ static int reset_controller(struct controller_state *state) {
 
 	// Set CC.CSS
 	uint8_t cap_css = MASKED_READ(properties->cap, 37, 0xFF);
+
 	if ((cap_css >> 7) & 1) {
 		MASKED_WRITE(properties->cc, 0b111, 4, 0b111);
-	} else if ((cap_css >> 6) & 1) {
+	}
+
+	if ((cap_css >> 6) & 1) {
 		MASKED_WRITE(properties->cc, 0b110, 4, 0b111);
-	} else {
+	}
+
+	if (((cap_css >> 6) & 1) == 0 && ((cap_css >> 0) & 1) == 1) {
 		MASKED_WRITE(properties->cc, 0b000, 4, 0b111);
 	}
 

@@ -59,7 +59,6 @@ int init_nvme_namespace(struct ARC_Resource *res, void *args) {
 	state->res = res;
 	res->driver_state = state;
 
-
 	uint8_t *data = (uint8_t *)pmm_alloc();
 	// NOTE: Assuming NVM Command Set
 	struct qs_entry cmd = {
@@ -124,7 +123,7 @@ int read_nvme_namespace(void *buffer, size_t size, size_t count, struct ARC_File
 		.prp.entry1 = ARC_HHDM_TO_PHYS(buffer),
 		.mptr = ARC_HHDM_TO_PHYS(meta),
 		.cdw12 = 0,
-		.cdw10 = 0,
+		.cdw10 = 2,
 		.nsid = state->namespace
         };
 
