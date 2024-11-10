@@ -31,15 +31,19 @@
 #include <mm/pmm.h>
 #include <global.h>
 #include <mm/allocator.h>
+#include <lib/util.h>
 
 struct nvme_namespace_driver_state {
 	struct ARC_Resource *res;
 	struct controller_state *state;
 	size_t nsze;
 	size_t ncap;
+	size_t lba_size;
+	size_t meta_size;
 	int namespace;
 	int ioqpair;
 	uint8_t nvm_set;
+	uint8_t meta_follows_lba;
 };
 
 int empty_nvme_namespace() {
@@ -70,8 +74,24 @@ int init_nvme_namespace(struct ARC_Resource *res, void *args) {
         };
 
 	nvme_submit_command(state->state, ADMIN_QUEUE, &cmd);
-	printf("Status: %x\n", nvme_poll_completion(state->state, &cmd, NULL));
+	nvme_poll_completion(state->state, &cmd, NULL);
 
+	// Get size of LBAs and metas
+	uint8_t format_idx = MASKED_READ(data[26], 0, 0xF) | (MASKED_READ(data[26], 5, 0b11) << 4);
+	state->meta_follows_lba = MASKED_READ(data[26], 4, 1);
+
+	uint32_t lbaf = *(uint32_t *)&data[128 + format_idx];
+	uint8_t lba_exp = MASKED_READ(lbaf, 16, 0xFF);
+
+	state->lba_size = 1;
+	while (lba_exp > 0) {
+		state->lba_size <<= 1;
+		lba_exp--;
+	}
+
+	state->meta_size = MASKED_READ(lbaf, 0, 0xFFFF);
+
+	// Set some base information
 	state->nvm_set = data[100];
 	state->nsze = *(uint64_t *)data;
 	state->ncap = *(uint64_t *)&data[8];
@@ -112,35 +132,79 @@ int uninit_nvme_namespace() {
 int read_nvme_namespace(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
 	if (buffer == NULL || size == 0 || count == 0 || file == NULL || res == NULL) {
 		return 0;
-	}
+ 	}
 
 	struct nvme_namespace_driver_state *state = res->driver_state;
 
+	// TODO: Extend the size of this data buffer, possibly change
+	//       it such that there is a cache allocated in the initialization
+	//       so that a buffer does not have to be allocated on the fly
+	uint8_t *data = pmm_alloc();
 	void *meta = pmm_alloc();
+	size_t read = 0;
 
-	struct qs_entry cmd = {
-	        .cdw0.opcode = 0x2,
-		.prp.entry1 = ARC_HHDM_TO_PHYS(buffer),
-		.mptr = ARC_HHDM_TO_PHYS(meta),
-		.cdw12 = 0,
-		.cdw10 = 2,
-		.nsid = state->namespace
-        };
+	while (read < size * count) {
+		struct qs_entry cmd = {
+	                .cdw0.opcode = 0x2,
+			.prp.entry1 = ARC_HHDM_TO_PHYS(data),
+			.mptr = ARC_HHDM_TO_PHYS(meta),
+			.cdw12 = (PAGE_SIZE / state->lba_size) - 1,
+			.cdw10 = (file->offset + read) / state->lba_size,
+			.nsid = state->namespace
+                };
 
-	nvme_submit_command(state->state, state->ioqpair, &cmd);
-	printf("Read status: %x\n", nvme_poll_completion(state->state, &cmd, NULL));
+		nvme_submit_command(state->state, state->ioqpair, &cmd);
+		nvme_poll_completion(state->state, &cmd, NULL);
 
-	return 1;
+		size_t copy_size = min(PAGE_SIZE, size * count - read);
+		memcpy(buffer + read, data, copy_size);
+		read += copy_size;
+	}
+
+	pmm_free(meta);
+	pmm_free(data);
+
+	return (size * count);
 }
 
 int write_nvme_namespace(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
-	(void)buffer;
-	(void)size;
-	(void)count;
-	(void)file;
-	(void)res;
+	if (buffer == NULL || size == 0 || count == 0 || file == NULL || res == NULL) {
+		return 0;
+ 	}
 
-	return 0;
+	struct nvme_namespace_driver_state *state = res->driver_state;
+
+	// TODO: Extend the size of this data buffer, possibly change
+	//       it such that there is a cache allocated in the initialization
+	//       so that a buffer does not have to be allocated on the fly
+	uint8_t *data = pmm_alloc();
+	void *meta = pmm_alloc();
+	size_t written = 0;
+
+	while (written < size * count) {
+		size_t copy_size = min(PAGE_SIZE, size * count - written);
+		memset(data, 0, PAGE_SIZE);
+		memcpy(data, buffer + written, copy_size);
+
+		struct qs_entry cmd = {
+	                .cdw0.opcode = 0x1,
+			.prp.entry1 = ARC_HHDM_TO_PHYS(data),
+			.mptr = ARC_HHDM_TO_PHYS(meta),
+			.cdw12 = (PAGE_SIZE / state->lba_size) - 1,
+			.cdw10 = (file->offset + written) / state->lba_size,
+			.nsid = state->namespace
+                };
+
+		nvme_submit_command(state->state, state->ioqpair, &cmd);
+		nvme_poll_completion(state->state, &cmd, NULL);
+
+		written += copy_size;
+	}
+
+	pmm_free(meta);
+	pmm_free(data);
+
+	return (size * count);
 }
 
 ARC_REGISTER_DRIVER(3, nvme_namespace_driver) = {
