@@ -32,6 +32,9 @@
 #include <lib/util.h>
 #include <drivers/dri_defs.h>
 #include <mm/pmm.h>
+#include <lib/perms.h>
+
+#define NAME_FORMAT "/dev/nvme%d"
 
 struct driver_state {
 	struct controller_state *controller_state;
@@ -59,13 +62,23 @@ struct qpair_list_entry *nvme_create_qpair(struct controller_state *state, uintp
 
 	mutex_lock(&state->qpair_lock);
 
-	entry->id = __builtin_ffs(state->id_bmp) - 1;
+	size_t idx = __builtin_ffs(state->id_bmp);
+
+	if (idx >= state->max_ioqpair_count) {
+		mutex_unlock(&state->qpair_lock);
+		free(entry);
+
+		return NULL;
+	}
+
+	entry->id = idx - 1;
 	state->id_bmp &= ~(1 << entry->id);
 	entry->submission_queue = init_ringbuffer((void *)sub, sub_len, sizeof(struct qs_entry));
 	entry->completion_queue = init_ringbuffer((void *)comp, comp_len, sizeof(struct qc_entry));
 	entry->phase = 1;
 	entry->next = state->list;
 	state->list = entry;
+
 	mutex_unlock(&state->qpair_lock);
 
 	memset((void *)sub, 0, sub_len);
@@ -185,6 +198,7 @@ int nvme_enumerate_enabled_command_sets(struct controller_state *state, uint64_t
 		int idx = __builtin_ffs(command_sets) - 1;
 
 		uint64_t *namespaces = (uint64_t *)pmm_alloc();
+		memset(namespaces, 0, PAGE_SIZE);
 
 		struct qs_entry get_ns_cmd = {
 	                .cdw0.opcode = 0x6,
@@ -213,9 +227,7 @@ int nvme_enumerate_enabled_command_sets(struct controller_state *state, uint64_t
 				.command_set = idx
 		        };
 
-			vfs_create("/dev/nvme_namespace", 0, ARC_VFS_N_DIR, NULL);
-			struct ARC_Resource *nres = init_resource(ARC_DRI_DEV, ARC_DRI_NVME_NS, &args);
-			vfs_mount("/dev/nvme_namespace", nres);
+			init_resource(ARC_DRI_DEV, ARC_DRI_NVME_NS, &args);
 		}
 
 		pmm_free(namespaces);
@@ -266,12 +278,6 @@ int nvme_identify_controller(struct controller_state *state) {
 	nvme_submit_command(state, ADMIN_QUEUE, &cmd);
 	nvme_poll_completion(state, &cmd, NULL);
 
-	printf("Active Namespaces:\n");
-	for (int i = 0; i < PAGE_SIZE; i++) {
-		printf("%02X ", *(data + i));
-	}
-	printf("\n");
-
 	pmm_free(data);
 
 	return 0;
@@ -292,7 +298,8 @@ int nvme_setup_io_queues(struct controller_state *state) {
 	nvme_submit_command(state, ADMIN_QUEUE, &cmd);
 	struct qc_entry ret = { 0 };
 	nvme_poll_completion(state, &cmd, &ret);
-	printf("%x\n", ret.dw0);
+
+	state->max_ioqpair_count = min(MASKED_READ(ret.dw0, 0, 0xFFFF), MASKED_READ(ret.dw0, 16, 0xFFFF));
 
 	return 0;
 }
@@ -309,6 +316,8 @@ int init_nvme(struct ARC_Resource *res, void *arg) {
 		return -2;
 	}
 
+	memset(dri, 0, sizeof(*dri));
+
 	struct controller_state *cntrl = (struct controller_state *)alloc(sizeof(*cntrl));
 
 	if (cntrl == NULL) {
@@ -316,18 +325,25 @@ int init_nvme(struct ARC_Resource *res, void *arg) {
 		return -3;
 	}
 
+	memset(cntrl, 0, sizeof(*cntrl));
+
 	dri->controller_state = cntrl;
 	dri->res = res;
 	res->driver_state = dri;
+
+	cntrl->max_ioqpair_count = 2;
 
 	init_nvme_pci(cntrl, arg);
 	nvme_identify_controller(cntrl);
 	nvme_setup_io_queues(cntrl);
 
-	printf("Cntrl: %d\n", cntrl->controller_type);
-
 	uint64_t enabled_command_sets = nvme_set_command_set(cntrl);
 	nvme_enumerate_enabled_command_sets(cntrl, enabled_command_sets, res->instance);
+
+	char path[64] = { 0 };
+	sprintf(path, NAME_FORMAT, cntrl->controller_id);
+	vfs_create(path, ARC_STD_PERM, ARC_VFS_N_DIR, NULL);
+	vfs_mount(path, res);
 
 	return 0;
 }
@@ -354,6 +370,14 @@ int write_nvme(void *buffer, size_t size, size_t count, struct ARC_File *file, s
 	return 0;
 }
 
+static int stat_nvme(struct ARC_Resource *res, char *filename, struct stat *stat) {
+	(void)res;
+	(void)filename;
+	(void)stat;
+
+	return 0;
+}
+
 int empty_nvme() {
 	return 0;
 }
@@ -375,5 +399,6 @@ ARC_REGISTER_DRIVER(3, nvme_driver) = {
 	.rename = empty_nvme,
 	.open = empty_nvme,
 	.close = empty_nvme,
+	.stat = stat_nvme,
 	.pci_codes = pci_codes
 };

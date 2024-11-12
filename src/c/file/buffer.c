@@ -157,6 +157,14 @@ static int buffer_seek(struct ARC_File *file, struct ARC_Resource *res) {
 	return 0;
 }
 
+static int buffer_stat(struct ARC_Resource *res, char *filename, struct stat *stat) {
+	(void)res;
+	(void)filename;
+	(void)stat;
+
+	return 0;
+}
+
 ARC_REGISTER_DRIVER(0, buffer) = {
         .index = 5,
 	.instance_counter = 0,
@@ -169,5 +177,6 @@ ARC_REGISTER_DRIVER(0, buffer) = {
 	.seek = buffer_seek,
 	.rename = buffer_empty,
 	.close = buffer_empty,
+	.stat = buffer_stat,
 	.pci_codes = NULL
 };

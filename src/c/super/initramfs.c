@@ -126,16 +126,18 @@ static int initramfs_uninit(struct ARC_Resource *res) {
 }
 
 static int initramfs_stat(struct ARC_Resource *res, char *filename, struct stat *stat) {
-	if (res == NULL || filename == NULL || stat == NULL) {
+	if (res == NULL || stat == NULL) {
 		return 1;
 	}
 
-	mutex_lock(&res->dri_state_mutex);
-
 	struct internal_driver_state *state = (struct internal_driver_state *)res->driver_state;
-	struct ARC_HeaderCPIO *header = initramfs_find_file(state->initramfs_base, filename);
 
-	mutex_unlock(&res->dri_state_mutex);
+	if (filename == NULL) {
+		// TODO: Figure out how to stat filesystem
+		return 0;
+	}
+
+	struct ARC_HeaderCPIO *header = initramfs_find_file(state->initramfs_base, filename);
 
 	if (header == NULL) {
 		return 1;
@@ -164,7 +166,6 @@ struct ARC_SuperDriverDef initramfs_super_spec = {
 	.remove = initramfs_empty,
 	.link = initramfs_empty,
 	.rename = initramfs_empty,
-	.stat = initramfs_stat,
 	.locate = initramfs_locate,
 };
 
@@ -180,6 +181,7 @@ ARC_REGISTER_DRIVER(0, initramfs_super) = {
 	.write = initramfs_empty,
 	.seek = initramfs_empty,
 	.rename = initramfs_empty,
+	.stat = initramfs_stat,
 	.identifer = ARC_DRIVER_IDEN_SUPER,
 	.driver = (void *)&initramfs_super_spec,
 	.pci_codes = NULL

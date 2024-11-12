@@ -120,6 +120,7 @@ static int reset_controller(struct controller_state *state) {
 		ARC_DEBUG(ERR, "Failed to reset controller, state or properties NULL\n");
 		return -1;
 	}
+
 	struct controller_properties *properties = state->properties;
 
 	// Disable

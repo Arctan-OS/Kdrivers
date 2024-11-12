@@ -147,6 +147,12 @@ static int initramfs_read(void *buffer, size_t size, size_t count, struct ARC_Fi
 }
 
 static int initramfs_write(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
+	(void)buffer;
+	(void)size;
+	(void)count;
+	(void)file;
+	(void)res;
+
 	ARC_DEBUG(ERR, "Read only file system, tried to write %s\n", buffer);
 
 	return 0;
@@ -164,6 +170,18 @@ static int initramfs_seek(struct ARC_File *file, struct ARC_Resource *res) {
 	return 0;
 }
 
+static int initramfs_stat(struct ARC_Resource *res, char *filename, struct stat *stat) {
+	(void)filename;
+
+	if (res == NULL || stat == NULL) {
+		return 1;
+	}
+
+	struct internal_driver_state *state = (struct internal_driver_state *)res->driver_state;
+
+	return initramfs_internal_stat(state->base, stat);
+}
+
 ARC_REGISTER_DRIVER(0, initramfs_file) = {
 	.index = 1,
 	.instance_counter = 0,
@@ -176,5 +194,6 @@ ARC_REGISTER_DRIVER(0, initramfs_file) = {
 	.write = initramfs_write,
 	.seek = initramfs_seek,
 	.rename = initramfs_empty,
+	.stat = initramfs_stat,
 	.pci_codes = NULL
 };

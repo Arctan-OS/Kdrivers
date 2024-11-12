@@ -32,6 +32,9 @@
 #include <global.h>
 #include <mm/allocator.h>
 #include <lib/util.h>
+#include <lib/perms.h>
+
+#define NAME_FORMAT "/dev/nvme%dn%d"
 
 struct nvme_namespace_driver_state {
 	struct ARC_Resource *res;
@@ -96,17 +99,20 @@ int init_nvme_namespace(struct ARC_Resource *res, void *args) {
 	state->nsze = *(uint64_t *)data;
 	state->ncap = *(uint64_t *)&data[8];
 
+	// TODO: The following three commands aren't yet used
 	cmd.cdw10 = 0x5;
 	nvme_submit_command(state->state, ADMIN_QUEUE, &cmd);
-	printf("Status: %x\n", nvme_poll_completion(state->state, &cmd, NULL));
+	nvme_poll_completion(state->state, &cmd, NULL);
 
 	cmd.cdw10 = 0x6;
 	nvme_submit_command(state->state, ADMIN_QUEUE, &cmd);
-	printf("Status: %x\n", nvme_poll_completion(state->state, &cmd, NULL));
+	nvme_poll_completion(state->state, &cmd, NULL);
 
-	cmd.cdw10 = 0x8;
-	nvme_submit_command(state->state, ADMIN_QUEUE, &cmd);
-	printf("Status: %x\n", nvme_poll_completion(state->state, &cmd, NULL));
+	// TODO: Figure out why this returns 0x4002
+	//cmd.cdw10 = 0x8;
+	//cmd.cdw11 = 0;
+	//nvme_submit_command(state->state, ADMIN_QUEUE, &cmd);
+	//nvme_poll_completion(state->state, &cmd, NULL);
 
 	void *qpairs = pmm_contig_alloc(2);
 	uintptr_t sub = (uintptr_t)qpairs;
@@ -121,6 +127,11 @@ int init_nvme_namespace(struct ARC_Resource *res, void *args) {
 		// TODO: Come up with a way to evenly distribute namespaces amongst
 		//       IO qpairs if none can be created
 	}
+
+	char path[64] = { 0 };
+	sprintf(path, NAME_FORMAT, dri_args->state->controller_id, dri_args->namespace);
+	vfs_create(path, ARC_STD_PERM, ARC_VFS_N_DIR, NULL);
+	vfs_mount(path, res);
 
 	return 0;
 }
@@ -207,10 +218,26 @@ int write_nvme_namespace(void *buffer, size_t size, size_t count, struct ARC_Fil
 	return (size * count);
 }
 
+static int stat_nvme_namespace(struct ARC_Resource *res, char *filename, struct stat *stat) {
+	(void)filename;
+
+	if (res == NULL || stat == NULL) {
+		return -1;
+	}
+
+	struct nvme_namespace_driver_state *state = (struct nvme_namespace_driver_state *)res->driver_state;
+
+	stat->st_blksize = state->lba_size;
+	stat->st_blocks = state->nsze;
+	stat->st_size = state->lba_size * state->nsze;
+
+	return 0;
+}
+
 ARC_REGISTER_DRIVER(3, nvme_namespace_driver) = {
         .index = 1,
 	.instance_counter = 0,
-	.name_format = "%sn%d",
+	.name_format = NAME_FORMAT,
         .init = init_nvme_namespace,
 	.uninit = uninit_nvme_namespace,
 	.read = read_nvme_namespace,
@@ -219,4 +246,5 @@ ARC_REGISTER_DRIVER(3, nvme_namespace_driver) = {
 	.rename = empty_nvme_namespace,
 	.open = empty_nvme_namespace,
 	.close = empty_nvme_namespace,
+	.stat = stat_nvme_namespace,
 };
