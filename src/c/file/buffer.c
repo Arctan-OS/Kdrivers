@@ -58,6 +58,8 @@ static int buffer_init(struct ARC_Resource *res, void *arg) {
 	state->buffer = (void *)alloc(size);
 	state->size = size;
 
+	memset(state->buffer, 0, state->size);
+
 	res->driver_state = state;
 
 	return 0;
@@ -158,9 +160,12 @@ static int buffer_seek(struct ARC_File *file, struct ARC_Resource *res) {
 }
 
 static int buffer_stat(struct ARC_Resource *res, char *filename, struct stat *stat) {
-	(void)res;
-	(void)filename;
-	(void)stat;
+	if (res == NULL || stat == NULL) {
+		return -1;
+	}
+
+	struct buffer_dri_state *state = res->driver_state;
+	stat->st_size = state->size;
 
 	return 0;
 }
