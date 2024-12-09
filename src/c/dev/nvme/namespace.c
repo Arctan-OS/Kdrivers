@@ -33,6 +33,7 @@
 #include <mm/allocator.h>
 #include <lib/util.h>
 #include <lib/perms.h>
+#include <drivers/dri_defs.h>
 
 #define NAME_FORMAT "/dev/nvme%dn%d"
 
@@ -239,8 +240,7 @@ static int stat_nvme_namespace(struct ARC_Resource *res, char *filename, struct 
 	return 0;
 }
 
-ARC_REGISTER_DRIVER(3, nvme_namespace_driver) = {
-        .index = 1,
+ARC_REGISTER_DRIVER(3, nvme_namespace,) = {
 	.instance_counter = 0,
 	.name_format = NAME_FORMAT,
         .init = init_nvme_namespace,

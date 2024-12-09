@@ -29,7 +29,6 @@
 #include <drivers/dri_defs.h>
 #include <abi-bits/seek-whence.h>
 
-ARC_REGISTER_DRIVER(0, ext2_file) = {
-	.index = 3,
+ARC_REGISTER_DRIVER(0, ext2, file) = {
 	.pci_codes = NULL
 };

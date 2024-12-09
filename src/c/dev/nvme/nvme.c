@@ -227,7 +227,7 @@ int nvme_enumerate_enabled_command_sets(struct controller_state *state, uint64_t
 				.command_set = idx
 		        };
 
-			init_resource(ARC_DRI_DEV, ARC_DRI_NVME_NS, &args);
+			init_resource(ARC_DRIDEF_NVME_NAMESPACE, &args);
 		}
 
 		pmm_free(namespaces);
@@ -389,11 +389,10 @@ int empty_nvme() {
 
 static uint32_t pci_codes[] = {
         0x1b360010,
-        ARC_DRI_PCI_TERMINATOR
+        ARC_DRIDEF_PCI_TERMINATOR
 };
 
-ARC_REGISTER_DRIVER(3, nvme_driver) = {
-        .index = 0,
+ARC_REGISTER_DRIVER(3, nvme,) = {
 	.instance_counter = 0,
 	.name_format = "nvme%d",
         .init = init_nvme,

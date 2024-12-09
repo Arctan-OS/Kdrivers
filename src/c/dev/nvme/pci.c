@@ -29,6 +29,7 @@
 #include <arch/pager.h>
 #include <mm/pmm.h>
 #include <lib/util.h>
+#include <drivers/dri_defs.h>
 
 int nvme_pci_submit_command(struct controller_state *state, int queue, struct qs_entry *cmd) {
 	if (state == NULL || cmd == NULL) {

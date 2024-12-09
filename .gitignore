@@ -1,3 +1,5 @@
 .ccls-cache/
 *.o
 *.elf
+dri_defs.c
+dri_defs.h

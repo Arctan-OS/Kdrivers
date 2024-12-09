@@ -182,8 +182,7 @@ static int initramfs_stat(struct ARC_Resource *res, char *filename, struct stat 
 	return initramfs_internal_stat(state->base, stat);
 }
 
-ARC_REGISTER_DRIVER(0, initramfs_file) = {
-	.index = 1,
+ARC_REGISTER_DRIVER(0, initramfs, file) = {
 	.instance_counter = 0,
 	.name_format = "cpiof%d",
 	.init = initramfs_init,

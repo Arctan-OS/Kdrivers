@@ -170,8 +170,22 @@ static int buffer_stat(struct ARC_Resource *res, char *filename, struct stat *st
 	return 0;
 }
 
-ARC_REGISTER_DRIVER(0, buffer) = {
-        .index = 5,
+ARC_REGISTER_DRIVER(0, buffer, file) = {
+	.instance_counter = 0,
+	.name_format = "buff%d",
+	.init = buffer_init,
+	.uninit = buffer_uninit,
+	.open = buffer_open,
+	.read = buffer_read,
+	.write = buffer_write,
+	.seek = buffer_seek,
+	.rename = buffer_empty,
+	.close = buffer_empty,
+	.stat = buffer_stat,
+	.pci_codes = NULL
+};
+
+ARC_REGISTER_DRIVER(0, buffer, super) = {
 	.instance_counter = 0,
 	.name_format = "buff%d",
 	.init = buffer_init,

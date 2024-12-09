@@ -28,7 +28,6 @@
 #include <lib/resource.h>
 #include <drivers/dri_defs.h>
 
-ARC_REGISTER_DRIVER(0, ext2_super) = {
-	.index = 2,
+ARC_REGISTER_DRIVER(0, ext2, super) = {
 	.pci_codes = NULL
 };
