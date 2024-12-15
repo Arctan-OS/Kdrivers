@@ -28,8 +28,10 @@ CFILES := $(shell find ./src/c/ -type f -name "*.c")
 ASFILES := $(shell find ./src/asm/ -type f -name "*.asm")
 OFILES := $(CFILES:.c=.o) $(ASFILES:.asm=.o)
 
+-include definitions
+
 .PHONY: all
-all: definitions $(OFILES)
+all: $(OFILES)
 
 .PHONY: definitions
 definitions:
