@@ -165,8 +165,6 @@ int read_nvme_namespace(void *buffer, size_t size, size_t count, struct ARC_File
 	void *meta = pmm_alloc();
 	size_t read = 0;
 
-	printf("Reading NVMe namespace for %d %d\n", size, count);
-
 	while (read < size * count) {
 		struct qs_entry cmd = {
 	                .cdw0.opcode = 0x2,

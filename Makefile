@@ -28,14 +28,8 @@ CFILES := $(shell find ./src/c/ -type f -name "*.c")
 ASFILES := $(shell find ./src/asm/ -type f -name "*.asm")
 OFILES := $(CFILES:.c=.o) $(ASFILES:.asm=.o)
 
--include definitions
-
 .PHONY: all
-all: definitions $(OFILES)
-
-.PHONY: definitions
-definitions:
-	python tools/gen_dri_defs.py ARC_REGISTER_DRIVER src/ src/c/include/drivers/dri_defs.h src/c/dri_defs.c
+all: $(OFILES)
 
 .PHONY: clean
 clean:
