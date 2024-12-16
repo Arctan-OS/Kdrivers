@@ -34,6 +34,7 @@
 #include <lib/util.h>
 #include <lib/perms.h>
 #include <drivers/dri_defs.h>
+#include <lib/partscan/partscan.h>
 
 #define NAME_FORMAT "/dev/nvme%dn%d"
 
@@ -139,6 +140,10 @@ int init_nvme_namespace(struct ARC_Resource *res, void *args) {
         };
 	vfs_create(path, &info);
 
+	partscan_enumerate_partitions(path);
+
+	free(path);
+
 	return 0;
 }
 
@@ -159,6 +164,8 @@ int read_nvme_namespace(void *buffer, size_t size, size_t count, struct ARC_File
 	uint8_t *data = pmm_alloc();
 	void *meta = pmm_alloc();
 	size_t read = 0;
+
+	printf("Reading NVMe namespace for %d %d\n", size, count);
 
 	while (read < size * count) {
 		struct qs_entry cmd = {

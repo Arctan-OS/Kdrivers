@@ -31,7 +31,7 @@ OFILES := $(CFILES:.c=.o) $(ASFILES:.asm=.o)
 -include definitions
 
 .PHONY: all
-all: $(OFILES)
+all: definitions $(OFILES)
 
 .PHONY: definitions
 definitions:
