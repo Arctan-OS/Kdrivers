@@ -170,14 +170,23 @@ static int initramfs_seek(struct ARC_File *file, struct ARC_Resource *res) {
 	return 0;
 }
 
-static int initramfs_stat(struct ARC_Resource *res, char *filename, struct stat *stat) {
+static int initramfs_stat(struct ARC_Resource *res, char *filename, struct stat *stat, void **hint) {
 	(void)filename;
+
+	printf("%p\n", hint);
+	if (hint != NULL) {
+		*hint = NULL;
+	}
 
 	if (res == NULL || stat == NULL) {
 		return 1;
 	}
 
 	struct internal_driver_state *state = (struct internal_driver_state *)res->driver_state;
+
+	if (state->base == NULL) {
+		return 2;
+	}
 
 	return initramfs_internal_stat(state->base, stat);
 }

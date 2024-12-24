@@ -159,7 +159,7 @@ static int buffer_seek(struct ARC_File *file, struct ARC_Resource *res) {
 	return 0;
 }
 
-static int buffer_stat(struct ARC_Resource *res, char *filename, struct stat *stat) {
+static int buffer_stat(struct ARC_Resource *res, char *filename, struct stat *stat, void **hint) {
 	if (res == NULL || stat == NULL) {
 		return -1;
 	}

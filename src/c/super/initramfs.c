@@ -125,7 +125,11 @@ static int initramfs_uninit(struct ARC_Resource *res) {
 	return 0;
 }
 
-static int initramfs_stat(struct ARC_Resource *res, char *filename, struct stat *stat) {
+static int initramfs_stat(struct ARC_Resource *res, char *filename, struct stat *stat, void **hint) {
+	if (hint != NULL) {
+		*hint = NULL;
+	}
+
 	if (res == NULL || stat == NULL) {
 		return 1;
 	}
@@ -146,7 +150,9 @@ static int initramfs_stat(struct ARC_Resource *res, char *filename, struct stat 
 	return initramfs_internal_stat(header, stat);
 }
 
-static void *initramfs_locate(struct ARC_Resource *res, char *filename) {
+static void *initramfs_locate(struct ARC_Resource *res, char *filename, void *hint) {
+	(void)hint;
+
 	if (res == NULL || filename == NULL) {
 		return NULL;
 	}
@@ -164,7 +170,6 @@ static void *initramfs_locate(struct ARC_Resource *res, char *filename) {
 struct ARC_SuperDriverDef initramfs_super_spec = {
 	.create = initramfs_empty,
 	.remove = initramfs_empty,
-	.link = initramfs_empty,
 	.rename = initramfs_empty,
 	.locate = initramfs_locate,
 };

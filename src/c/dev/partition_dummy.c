@@ -112,8 +112,10 @@ static int write_partition_dummy(void *buffer, size_t size, size_t count, struct
 	return vfs_write(buffer, size, count, state->drive);
 }
 
-static int stat_partition_dummy(struct ARC_Resource *res, char *filename, struct stat *stat) {
+static int stat_partition_dummy(struct ARC_Resource *res, char *filename, struct stat *stat, void **hint) {
 	(void)filename;
+	(void)hint;
+
 	if (res == NULL || stat == NULL) {
 		return -1;
 	}

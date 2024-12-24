@@ -375,10 +375,11 @@ int write_nvme(void *buffer, size_t size, size_t count, struct ARC_File *file, s
 	return 0;
 }
 
-static int stat_nvme(struct ARC_Resource *res, char *filename, struct stat *stat) {
+static int stat_nvme(struct ARC_Resource *res, char *filename, struct stat *stat, void **hint) {
 	(void)res;
 	(void)filename;
 	(void)stat;
+	(void)hint;
 
 	return 0;
 }

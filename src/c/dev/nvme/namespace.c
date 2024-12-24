@@ -229,8 +229,9 @@ int write_nvme_namespace(void *buffer, size_t size, size_t count, struct ARC_Fil
 	return (size * count);
 }
 
-static int stat_nvme_namespace(struct ARC_Resource *res, char *filename, struct stat *stat) {
+static int stat_nvme_namespace(struct ARC_Resource *res, char *filename, struct stat *stat, void **hint) {
 	(void)filename;
+	(void)hint;
 
 	if (res == NULL || stat == NULL) {
 		return -1;
