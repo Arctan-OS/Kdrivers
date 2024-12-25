@@ -63,6 +63,12 @@ int init_nvme_namespace(struct ARC_Resource *res, void *args) {
 	struct nvme_namespace_dri_args *dri_args = (struct nvme_namespace_dri_args *)args;
 	struct nvme_namespace_driver_state *state = (struct nvme_namespace_driver_state *)alloc(sizeof(*state));
 
+	if (state == NULL) {
+		return -2;
+	}
+
+	memset(state, 0, sizeof(*state));
+
 	state->state = dri_args->state;
 	state->namespace = dri_args->namespace;
 	state->res = res;

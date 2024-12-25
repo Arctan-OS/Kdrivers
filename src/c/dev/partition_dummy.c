@@ -58,6 +58,8 @@ static int init_partition_dummy(struct ARC_Resource *res, void *args) {
 		return -2;
 	}
 
+	memset(state, 0, sizeof(*state));
+
 	struct ARC_DriArgs_ParitionDummy *dri_args = (struct ARC_DriArgs_ParitionDummy *)args;
 
 	state->attrs = dri_args->attrs;

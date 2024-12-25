@@ -173,7 +173,6 @@ static int initramfs_seek(struct ARC_File *file, struct ARC_Resource *res) {
 static int initramfs_stat(struct ARC_Resource *res, char *filename, struct stat *stat, void **hint) {
 	(void)filename;
 
-	printf("%p\n", hint);
 	if (hint != NULL) {
 		*hint = NULL;
 	}
