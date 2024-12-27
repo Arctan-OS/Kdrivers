@@ -51,10 +51,6 @@ struct nvme_namespace_driver_state {
 	uint8_t meta_follows_lba;
 };
 
-int empty_nvme_namespace() {
-	return 0;
-}
-
 int init_nvme_namespace(struct ARC_Resource *res, void *args) {
 	if (res == NULL || args == NULL) {
 		return -1;
@@ -148,8 +144,6 @@ int init_nvme_namespace(struct ARC_Resource *res, void *args) {
 
 	partscan_enumerate_partitions(path);
 
-	free(path);
-
 	return 0;
 }
 
@@ -157,7 +151,7 @@ int uninit_nvme_namespace() {
 	return 0;
 };
 
-int read_nvme_namespace(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
+static size_t read_nvme_namespace(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
 	if (buffer == NULL || size == 0 || count == 0 || file == NULL || res == NULL) {
 		return 0;
  	}
@@ -195,7 +189,7 @@ int read_nvme_namespace(void *buffer, size_t size, size_t count, struct ARC_File
 	return (size * count);
 }
 
-int write_nvme_namespace(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
+static size_t write_nvme_namespace(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
 	if (buffer == NULL || size == 0 || count == 0 || file == NULL || res == NULL) {
 		return 0;
  	}
@@ -253,15 +247,13 @@ static int stat_nvme_namespace(struct ARC_Resource *res, char *filename, struct 
 }
 
 ARC_REGISTER_DRIVER(3, nvme_namespace,) = {
-	.instance_counter = 0,
-	.name_format = NAME_FORMAT,
         .init = init_nvme_namespace,
 	.uninit = uninit_nvme_namespace,
 	.read = read_nvme_namespace,
 	.write = write_nvme_namespace,
-	.seek = empty_nvme_namespace,
-	.rename = empty_nvme_namespace,
-	.open = empty_nvme_namespace,
-	.close = empty_nvme_namespace,
+	.seek = dridefs_int_func_empty,
+	.rename = dridefs_int_func_empty,
 	.stat = stat_nvme_namespace,
 };
+
+#undef NAME_FORMAT

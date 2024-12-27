@@ -27,8 +27,5 @@
 */
 #include <lib/resource.h>
 #include <drivers/dri_defs.h>
-#include <abi-bits/seek-whence.h>
 
-ARC_REGISTER_DRIVER(0, ext2, file) = {
-	.pci_codes = NULL
-};
+ARC_REGISTER_DRIVER(0, ext2, file) = { 0 };

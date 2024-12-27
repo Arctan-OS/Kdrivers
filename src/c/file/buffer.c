@@ -33,14 +33,12 @@
 #include <abi-bits/seek-whence.h>
 #include <arctan.h>
 
+// NOTE: Should buffers be made such that they are dynamic in size? So one can just append data?
+
 struct buffer_dri_state {
 	size_t size;
 	void *buffer;
 };
-
-int buffer_empty() {
-	return 0;
-}
 
 static int buffer_init(struct ARC_Resource *res, void *arg) {
 	size_t size = ARC_STD_BUFF_SIZE;
@@ -78,22 +76,7 @@ static int buffer_uninit(struct ARC_Resource *res) {
 	return 0;
 }
 
-static int buffer_open(struct ARC_File *file, struct ARC_Resource *res, int flags, uint32_t mode) {
-	(void)mode;
-	(void)flags;
-
-	struct buffer_dri_state *state = (struct buffer_dri_state *)res->driver_state;
-
-	if (state == NULL) {
-		return -1;
-	}
-
-	file->node->stat.st_size = state->size;
-
-	return 0;
-}
-
-static int buffer_read(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
+static size_t buffer_read(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
 	if (buffer == NULL || size == 0 || count == 0 || file == NULL || res == NULL || res->driver_state == NULL) {
 		return -1;
 	}
@@ -122,7 +105,7 @@ static int buffer_read(void *buffer, size_t size, size_t count, struct ARC_File 
 	return given;
 }
 
-static int buffer_write(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
+static size_t buffer_write(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
 	if (buffer == NULL || size == 0 || count == 0 || file == NULL || res == NULL || res->driver_state == NULL) {
 		return -1;
 	}
@@ -160,6 +143,9 @@ static int buffer_seek(struct ARC_File *file, struct ARC_Resource *res) {
 }
 
 static int buffer_stat(struct ARC_Resource *res, char *filename, struct stat *stat, void **hint) {
+	(void)filename;
+	(void)hint;
+
 	if (res == NULL || stat == NULL) {
 		return -1;
 	}
@@ -171,31 +157,23 @@ static int buffer_stat(struct ARC_Resource *res, char *filename, struct stat *st
 }
 
 ARC_REGISTER_DRIVER(0, buffer, file) = {
-	.instance_counter = 0,
-	.name_format = "buff%d",
 	.init = buffer_init,
 	.uninit = buffer_uninit,
-	.open = buffer_open,
 	.read = buffer_read,
 	.write = buffer_write,
 	.seek = buffer_seek,
-	.rename = buffer_empty,
-	.close = buffer_empty,
+	.rename = dridefs_int_func_empty,
 	.stat = buffer_stat,
 	.pci_codes = NULL
 };
 
 ARC_REGISTER_DRIVER(0, buffer, super) = {
-	.instance_counter = 0,
-	.name_format = "buff%d",
 	.init = buffer_init,
 	.uninit = buffer_uninit,
-	.open = buffer_open,
 	.read = buffer_read,
 	.write = buffer_write,
 	.seek = buffer_seek,
-	.rename = buffer_empty,
-	.close = buffer_empty,
+	.rename = dridefs_int_func_empty,
 	.stat = buffer_stat,
 	.pci_codes = NULL
 };

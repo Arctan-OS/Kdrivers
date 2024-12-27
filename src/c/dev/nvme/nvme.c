@@ -158,7 +158,7 @@ uint64_t nvme_set_command_set(struct controller_state *state) {
 		nvme_submit_command(state, ADMIN_QUEUE, &iocs_struct_cmd);
 		nvme_poll_completion(state, &iocs_struct_cmd, NULL);
 
-		int i = 0;
+		uint32_t i = 0;
 		uint64_t enabled_cmd_sets = 0;
 
 		for (; i < 512; i++) {
@@ -193,7 +193,7 @@ uint64_t nvme_set_command_set(struct controller_state *state) {
 	return 0;
 }
 
-int nvme_enumerate_enabled_command_sets(struct controller_state *state, uint64_t command_sets, uint64_t dri_instance) {
+int nvme_enumerate_enabled_command_sets(struct controller_state *state, uint64_t command_sets) {
 	while (command_sets != 0) {
 		int idx = __builtin_ffs(command_sets) - 1;
 
@@ -338,7 +338,7 @@ int init_nvme(struct ARC_Resource *res, void *arg) {
 	nvme_setup_io_queues(cntrl);
 
 	uint64_t enabled_command_sets = nvme_set_command_set(cntrl);
-	nvme_enumerate_enabled_command_sets(cntrl, enabled_command_sets, res->instance);
+	nvme_enumerate_enabled_command_sets(cntrl, enabled_command_sets);
 
 	char path[64] = { 0 };
 	sprintf(path, NAME_FORMAT, cntrl->controller_id);
@@ -357,7 +357,7 @@ int uninit_nvme() {
 	return 0;
 }
 
-int read_nvme(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
+static size_t read_nvme(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
 	if (buffer == NULL || size == 0 || count == 0 || file == NULL || res == NULL) {
 		return 0;
 	}
@@ -365,7 +365,7 @@ int read_nvme(void *buffer, size_t size, size_t count, struct ARC_File *file, st
 	return 1;
 }
 
-int write_nvme(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
+static size_t write_nvme(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
 	(void)buffer;
 	(void)size;
 	(void)count;
@@ -384,26 +384,20 @@ static int stat_nvme(struct ARC_Resource *res, char *filename, struct stat *stat
 	return 0;
 }
 
-int empty_nvme() {
-	return 0;
-}
-
 static uint32_t pci_codes[] = {
         0x1b360010,
         ARC_DRIDEF_PCI_TERMINATOR
 };
 
 ARC_REGISTER_DRIVER(3, nvme,) = {
-	.instance_counter = 0,
-	.name_format = "nvme%d",
         .init = init_nvme,
 	.uninit = uninit_nvme,
 	.read = read_nvme,
 	.write = write_nvme,
-	.seek = empty_nvme,
-	.rename = empty_nvme,
-	.open = empty_nvme,
-	.close = empty_nvme,
+	.seek = dridefs_int_func_empty,
+	.rename = dridefs_int_func_empty,
 	.stat = stat_nvme,
 	.pci_codes = pci_codes
 };
+
+#undef NAME_FORMAT

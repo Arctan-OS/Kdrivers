@@ -111,6 +111,11 @@ def construct_dri_defs(definitions, out_header_file, out_source_file):
   out_header.write("#define ARC_DRIDEF_PCI_TERMINATOR 0xFFFFFFFF\n")
 
   out_header.write("extern struct ARC_DriverDef *__DRIVER_LOOKUP_TABLE[];\n")
+
+  out_header.write("int dridefs_int_func_empty();\n")
+  out_header.write("size_t dridefs_size_t_func_empty();\n")
+  out_header.write("void *dridefs_void_func_empty();\n")
+
   out_header.write("#endif // AUTOGEN_ARC_DRIVERS_DRI_DEFS\n")
 
   out_source = open(out_source_file, "w")
@@ -130,6 +135,10 @@ def construct_dri_defs(definitions, out_header_file, out_source_file):
       name = "\t[{0}] = &__driver_{1}_{2},\n".format(definitions[definition][sub], definition, sub)
       out_source.write(name)
   out_source.write("};\n")
+
+  out_source.write("int dridefs_int_func_empty() { return -1; }\n")
+  out_source.write("size_t dridefs_size_t_func_empty() { return 0; }\n")
+  out_source.write("void *dridefs_void_func_empty() { return NULL; }\n")
 
   return 0
 

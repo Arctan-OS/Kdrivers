@@ -48,10 +48,6 @@ struct driver_state {
 	struct ext2_super_block super;
 };
 
-static int empty_ext2_super() {
-	return 0;
-}
-
 static int init_ext2_super(struct ARC_Resource *res, void *args) {
 	if (res == NULL || args == NULL) {
 		return -1;
@@ -111,7 +107,7 @@ static int uninit_ext2_super() {
 	return 0;
 };
 
-static int read_ext2_super(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
+static size_t read_ext2_super(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
 	if (buffer == NULL || size == 0 || count == 0 || file == NULL || res == NULL) {
 		return 0;
  	}
@@ -119,7 +115,7 @@ static int read_ext2_super(void *buffer, size_t size, size_t count, struct ARC_F
 	return 0;
 }
 
-static int write_ext2_super(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
+static size_t write_ext2_super(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
 	if (buffer == NULL || size == 0 || count == 0 || file == NULL || res == NULL) {
 		return 0;
  	}
@@ -129,6 +125,8 @@ static int write_ext2_super(void *buffer, size_t size, size_t count, struct ARC_
 
 static int stat_ext2_super(struct ARC_Resource *res, char *filename, struct stat *stat, void **hint) {
 	(void)filename;
+	(void)hint;
+
 	if (res == NULL || stat == NULL) {
 		return -1;
 	}
@@ -137,14 +135,15 @@ static int stat_ext2_super(struct ARC_Resource *res, char *filename, struct stat
 }
 
 ARC_REGISTER_DRIVER(0, ext2, super) = {
-	.instance_counter = 0,
         .init = init_ext2_super,
 	.uninit = uninit_ext2_super,
-	.read = read_ext2_super,
 	.write = write_ext2_super,
-	.seek = empty_ext2_super,
-	.rename = empty_ext2_super,
-	.open = empty_ext2_super,
-	.close = empty_ext2_super,
+	.read = read_ext2_super,
+	.seek = dridefs_int_func_empty,
+	.rename = dridefs_int_func_empty,
 	.stat = stat_ext2_super,
+	.control = dridefs_void_func_empty,
+	.create = dridefs_int_func_empty,
+	.remove = dridefs_int_func_empty,
+	.locate = dridefs_void_func_empty,
 };

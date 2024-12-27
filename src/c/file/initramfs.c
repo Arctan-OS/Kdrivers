@@ -73,10 +73,6 @@ static int initramfs_internal_stat(struct ARC_HeaderCPIO *header, struct stat *s
 	return 0;
 }
 
-static int initramfs_empty() {
-	return 0;
-}
-
 static int initramfs_init(struct ARC_Resource *res, void *args) {
 	struct internal_driver_state *state = (struct internal_driver_state *)alloc(sizeof(*state));
 
@@ -97,26 +93,7 @@ static int initramfs_uninit(struct ARC_Resource *res) {
 	return 0;
 }
 
-static int initramfs_open(struct ARC_File *file, struct ARC_Resource *res, int flags, uint32_t mode) {
-	(void)flags;
-	(void)mode;
-
-	if (file == NULL) {
-		return EINVAL;
-	}
-
-	struct internal_driver_state *state = (struct internal_driver_state *)res->driver_state;
-
-	if (state == NULL) {
-		return -1;
-	}
-
-	initramfs_internal_stat(state->base, &file->node->stat);
-
-	return 0;
-}
-
-static int initramfs_read(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
+static size_t initramfs_read(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
 	if (file == NULL || res->driver_state == NULL) {
 		return 0;
 	}
@@ -143,17 +120,17 @@ static int initramfs_read(void *buffer, size_t size, size_t count, struct ARC_Fi
 		*((uint8_t *)(buffer + i)) = value;
 	}
 
-	return count;
+	return size * count;
 }
 
-static int initramfs_write(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
+static size_t initramfs_write(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
 	(void)buffer;
 	(void)size;
 	(void)count;
 	(void)file;
 	(void)res;
 
-	ARC_DEBUG(ERR, "Read only file system, tried to write %s\n", buffer);
+	ARC_DEBUG(ERR, "Read only file system, tried to write %p\n", buffer);
 
 	return 0;
 }
@@ -191,16 +168,14 @@ static int initramfs_stat(struct ARC_Resource *res, char *filename, struct stat 
 }
 
 ARC_REGISTER_DRIVER(0, initramfs, file) = {
-	.instance_counter = 0,
-	.name_format = "cpiof%d",
 	.init = initramfs_init,
 	.uninit = initramfs_uninit,
-	.open = initramfs_open,
-	.close = initramfs_empty,
 	.read = initramfs_read,
 	.write = initramfs_write,
 	.seek = initramfs_seek,
-	.rename = initramfs_empty,
+	.rename = dridefs_int_func_empty,
 	.stat = initramfs_stat,
-	.pci_codes = NULL
+	.create = dridefs_int_func_empty,
+	.remove = dridefs_int_func_empty,
+	.locate = dridefs_void_func_empty,
 };

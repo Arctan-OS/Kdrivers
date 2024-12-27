@@ -104,10 +104,6 @@ static int initramfs_internal_stat(struct ARC_HeaderCPIO *header, struct stat *s
 	return 0;
 }
 
-static int initramfs_empty() {
-	return 0;
-}
-
 static int initramfs_init(struct ARC_Resource *res, void *args) {
 	struct internal_driver_state *state = (struct internal_driver_state *)alloc(sizeof(*state));
 
@@ -167,27 +163,15 @@ static void *initramfs_locate(struct ARC_Resource *res, char *filename, void *hi
 	return ret;
 }
 
-struct ARC_SuperDriverDef initramfs_super_spec = {
-	.create = initramfs_empty,
-	.remove = initramfs_empty,
-	.rename = initramfs_empty,
-	.locate = initramfs_locate,
-};
-
 ARC_REGISTER_DRIVER(0, initramfs, super) = {
-	.instance_counter = 0,
-	.name_format = "cpiofs%d",
 	.init = initramfs_init,
 	.uninit = initramfs_uninit,
-	.open =  initramfs_empty,
-	.close = initramfs_empty,
-	.read = initramfs_empty,
-	.write = initramfs_empty,
-	.seek = initramfs_empty,
-	.rename = initramfs_empty,
+	.read = dridefs_size_t_func_empty,
+	.write = dridefs_size_t_func_empty,
+	.seek = dridefs_int_func_empty,
+	.rename = dridefs_int_func_empty,
 	.stat = initramfs_stat,
-	.identifer = ARC_DRIVER_IDEN_SUPER,
-	.driver = (void *)&initramfs_super_spec,
-	.pci_codes = NULL
+	.create = dridefs_int_func_empty,
+	.remove = dridefs_int_func_empty,
+	.locate = initramfs_locate,
 };
-

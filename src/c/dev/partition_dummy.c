@@ -30,6 +30,7 @@
 #include <mm/allocator.h>
 #include <lib/util.h>
 #include <lib/perms.h>
+#include <drivers/dri_defs.h>
 #include <abi-bits/seek-whence.h>
 
 #define NAME_FORMAT "%sp%d"
@@ -42,10 +43,6 @@ struct driver_state {
 	size_t lba_size;
 	uint32_t partition_number;
 };
-
-static int empty_partition_dummy() {
-	return 0;
-}
 
 static int init_partition_dummy(struct ARC_Resource *res, void *args) {
 	if (res == NULL || args == NULL) {
@@ -90,7 +87,7 @@ static int uninit_partition_dummy() {
 	return 0;
 };
 
-static int read_partition_dummy(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
+static size_t read_partition_dummy(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
 	if (buffer == NULL || size == 0 || count == 0 || file == NULL || res == NULL) {
 		return 0;
  	}
@@ -102,7 +99,7 @@ static int read_partition_dummy(void *buffer, size_t size, size_t count, struct 
 	return vfs_read(buffer, size, count, state->drive);
 }
 
-static int write_partition_dummy(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
+static size_t write_partition_dummy(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
 	if (buffer == NULL || size == 0 || count == 0 || file == NULL || res == NULL) {
 		return 0;
  	}
@@ -132,15 +129,13 @@ static int stat_partition_dummy(struct ARC_Resource *res, char *filename, struct
 }
 
 ARC_REGISTER_DRIVER(3, partition_dummy,) = {
-	.instance_counter = 0,
-	.name_format = NAME_FORMAT,
         .init = init_partition_dummy,
 	.uninit = uninit_partition_dummy,
 	.read = read_partition_dummy,
 	.write = write_partition_dummy,
-	.seek = empty_partition_dummy,
-	.rename = empty_partition_dummy,
-	.open = empty_partition_dummy,
-	.close = empty_partition_dummy,
+	.seek = dridefs_int_func_empty,
+	.rename = dridefs_int_func_empty,
 	.stat = stat_partition_dummy,
 };
+
+#undef NAME_FORMAT
