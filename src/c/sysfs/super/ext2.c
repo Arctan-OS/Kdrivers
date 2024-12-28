@@ -29,7 +29,8 @@
 #include <drivers/dri_defs.h>
 #include <mm/allocator.h>
 #include <lib/perms.h>
-#include <drivers/super/ext2.h>
+#include <drivers/sysfs/super/ext2.h>
+#include <lib/util.h>
 
 #define EXT2_INODE2_BLOCK_GROUP(__inode, __state) \
 	((inode - 1) / __state->super.inodes_per_group)
@@ -45,7 +46,12 @@ struct driver_state {
 	struct ARC_File *partition;
 	struct ext2_block_group_desc *descriptor_table;
 	size_t block_size;
+	uint64_t root_directory_block;
 	struct ext2_super_block super;
+};
+
+struct directory_hints {
+	uint64_t inode_block;
 };
 
 static int init_ext2_super(struct ARC_Resource *res, void *args) {
@@ -123,9 +129,8 @@ static size_t write_ext2_super(void *buffer, size_t size, size_t count, struct A
 	return 0;
 }
 
-static int stat_ext2_super(struct ARC_Resource *res, char *filename, struct stat *stat, void **hint) {
+static int stat_ext2_super(struct ARC_Resource *res, char *filename, struct stat *stat) {
 	(void)filename;
-	(void)hint;
 
 	if (res == NULL || stat == NULL) {
 		return -1;
@@ -133,6 +138,40 @@ static int stat_ext2_super(struct ARC_Resource *res, char *filename, struct stat
 
 	return 0;
 }
+
+static uint64_t get_node_from_dir(uint64_t start_block, char *filepath) {
+	size_t last_sep = 0;
+	size_t max = strlen(filepath);
+
+	for (size_t i = 0; i < max; i++) {
+		if (filepath[i] != '/' && i != max - 1) {
+			continue;
+		}
+
+		size_t comp_len = i - last_sep - 1;
+
+		if (comp_len == 0) {
+			continue;
+		}
+
+		char *comp_name = strndup(&filepath[last_sep + 1], comp_len);
+
+		if (filepath[i] == '/') {
+			last_sep = i;
+		}
+	}
+
+	return 0;
+}
+
+static void *locate_ext2_super(struct ARC_Resource *res, char *filename) {
+	if (res == NULL || filename == NULL) {
+		return NULL;
+	}
+
+	return NULL;
+}
+
 
 ARC_REGISTER_DRIVER(0, ext2, super) = {
         .init = init_ext2_super,
@@ -145,5 +184,5 @@ ARC_REGISTER_DRIVER(0, ext2, super) = {
 	.control = dridefs_void_func_empty,
 	.create = dridefs_int_func_empty,
 	.remove = dridefs_int_func_empty,
-	.locate = dridefs_void_func_empty,
+	.locate = locate_ext2_super,
 };

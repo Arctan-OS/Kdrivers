@@ -52,8 +52,8 @@ def fill_in_indices(definitions):
   index = 0
   for definition in definitions:
     if (definitions[definition]["group"] == 0 or definitions[definition]["group"] == 1):
-      definitions[definition] = {"group":definitions[definition]["group"], "super":index, "file":index + 1}
-      index = index + 2
+      definitions[definition] = {"group":definitions[definition]["group"], "super":index, "directory":index + 1, "file":index + 2}
+      index = index + 3
       continue
     definitions[definition].update({"":index})
     index = index + 1

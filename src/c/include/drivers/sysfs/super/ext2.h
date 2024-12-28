@@ -24,10 +24,12 @@
  *
  * @DESCRIPTION
 */
-#ifndef ARC_DRIVERS_SUPER_EXT2_H
-#define ARC_DRIVERS_SUPER_EXT2_H
+#ifndef ARC_DRIVERS_SYSFS_SUPER_EXT2_H
+#define ARC_DRIVERS_SYSFS_SUPER_EXT2_H
 
 #define EXT2_SIG 0xEF53
+
+#include <stdint.h>
 
 struct ext2_super_block {
 	uint32_t total_inodes;
@@ -81,6 +83,41 @@ struct ext2_block_group_desc {
 	uint32_t unallocated_blocks;
 	uint32_t unallocated_inodes;
 	uint32_t directory_count;
+}__attribute__((packed));
+
+
+struct ext2_inode {
+	uint16_t type_perms;
+	uint16_t uid;
+	uint32_t size_low;
+	uint32_t last_access;
+	uint32_t creation;
+	uint32_t last_mod;
+	uint32_t deletion;
+	uint16_t gid;
+	uint16_t hard_link_count;
+	uint32_t sectors_used;
+	uint32_t flags;
+	uint32_t os_specific0;
+	uint32_t dbp0;
+	uint32_t dpb1;
+	uint32_t dpb2;
+	uint32_t dpb3;
+	uint32_t dbp4;
+	uint32_t dpb5;
+	uint32_t dpb6;
+	uint32_t dpb7;
+	uint32_t dbp8;
+	uint32_t dpb9;
+	uint32_t dpb10;
+	uint32_t dpb11;
+	uint32_t sibp;
+	uint32_t dibp;
+	uint32_t gen_number;
+	uint32_t ext_acl; // Reserved in ext2 version 0
+	uint32_t ext_dynamic; // File: upper 32-bits of file size; Directoy: ACL
+	uint32_t frag_block_addr;
+	uint8_t os_specific1[12];
 }__attribute__((packed));
 
 #endif

@@ -24,9 +24,9 @@
  *
  * @DESCRIPTION
 */
-#include <drivers/dev/nvme/nvme.h>
-#include <drivers/dev/nvme/namespace.h>
-#include <drivers/dev/nvme/pci.h>
+#include <drivers/sysdev/nvme/nvme.h>
+#include <drivers/sysdev/nvme/namespace.h>
+#include <drivers/sysdev/nvme/pci.h>
 #include <mm/allocator.h>
 #include <lib/ringbuffer.h>
 #include <lib/util.h>
@@ -375,11 +375,10 @@ static size_t write_nvme(void *buffer, size_t size, size_t count, struct ARC_Fil
 	return 0;
 }
 
-static int stat_nvme(struct ARC_Resource *res, char *filename, struct stat *stat, void **hint) {
+static int stat_nvme(struct ARC_Resource *res, char *filename, struct stat *stat) {
 	(void)res;
 	(void)filename;
 	(void)stat;
-	(void)hint;
 
 	return 0;
 }

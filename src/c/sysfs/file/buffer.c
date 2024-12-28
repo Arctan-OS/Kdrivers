@@ -81,8 +81,6 @@ static size_t buffer_read(void *buffer, size_t size, size_t count, struct ARC_Fi
 		return -1;
 	}
 
-	mutex_lock(&res->dri_state_mutex);
-
 	struct buffer_dri_state *state = (struct buffer_dri_state *)res->driver_state;
 
 	size_t wanted = size * count;
@@ -90,7 +88,6 @@ static size_t buffer_read(void *buffer, size_t size, size_t count, struct ARC_Fi
 
 	if (accessible == 0) {
 		return 0;
-		mutex_unlock(&res->dri_state_mutex);
 	}
 
 	int64_t delta = wanted - accessible;
@@ -100,8 +97,6 @@ static size_t buffer_read(void *buffer, size_t size, size_t count, struct ARC_Fi
 	// Do the actual giving
 	memcpy(buffer, state->buffer + file->offset, given);
 
-	mutex_unlock(&res->dri_state_mutex);
-
 	return given;
 }
 
@@ -110,9 +105,6 @@ static size_t buffer_write(void *buffer, size_t size, size_t count, struct ARC_F
 		return -1;
 	}
 
-
-	mutex_lock(&res->dri_state_mutex);
-
 	struct buffer_dri_state *state = (struct buffer_dri_state *)res->driver_state;
 
 	size_t wanted = size * count;
@@ -120,7 +112,6 @@ static size_t buffer_write(void *buffer, size_t size, size_t count, struct ARC_F
 
 	if (accessible == 0) {
 		return 0;
-		mutex_unlock(&res->dri_state_mutex);
 	}
 
 	int64_t delta = wanted - accessible;
@@ -129,8 +120,6 @@ static size_t buffer_write(void *buffer, size_t size, size_t count, struct ARC_F
 
 	// Do the actual receiving
 	memcpy(state->buffer + file->offset, buffer, given);
-
-	mutex_unlock(&res->dri_state_mutex);
 
 	return given;
 }
@@ -142,9 +131,8 @@ static int buffer_seek(struct ARC_File *file, struct ARC_Resource *res) {
 	return 0;
 }
 
-static int buffer_stat(struct ARC_Resource *res, char *filename, struct stat *stat, void **hint) {
+static int buffer_stat(struct ARC_Resource *res, char *filename, struct stat *stat) {
 	(void)filename;
-	(void)hint;
 
 	if (res == NULL || stat == NULL) {
 		return -1;
@@ -167,13 +155,25 @@ ARC_REGISTER_DRIVER(0, buffer, file) = {
 	.pci_codes = NULL
 };
 
-ARC_REGISTER_DRIVER(0, buffer, super) = {
-	.init = buffer_init,
-	.uninit = buffer_uninit,
-	.read = buffer_read,
-	.write = buffer_write,
-	.seek = buffer_seek,
+// Directory and super drivers are unused, they are not needed
+ARC_REGISTER_DRIVER(0, buffer, directory) = {
+	.init = dridefs_int_func_empty,
+	.uninit = dridefs_int_func_empty,
+	.read = dridefs_size_t_func_empty,
+	.write = dridefs_size_t_func_empty,
+	.seek = dridefs_int_func_empty,
 	.rename = dridefs_int_func_empty,
-	.stat = buffer_stat,
+	.stat = dridefs_int_func_empty,
+	.pci_codes = NULL
+};
+
+ARC_REGISTER_DRIVER(0, buffer, super) = {
+	.init = dridefs_int_func_empty,
+	.uninit = dridefs_int_func_empty,
+	.read = dridefs_size_t_func_empty,
+	.write = dridefs_size_t_func_empty,
+	.seek = dridefs_int_func_empty,
+	.rename = dridefs_int_func_empty,
+	.stat = dridefs_int_func_empty,
 	.pci_codes = NULL
 };

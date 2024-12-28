@@ -1,5 +1,5 @@
 /**
- * @file namespace.h
+ * @file ext2.c
  *
  * @author awewsomegamer <awewsomegamer@gmail.com>
  *
@@ -24,16 +24,19 @@
  *
  * @DESCRIPTION
 */
-#ifndef ARC_DRIVERS_DEV_NVME_NAMESPACE_H
-#define ARC_DRIVERS_DEV_NVME_NAMESPACE_H
+#include <drivers/dri_defs.h>
+#include <lib/resource.h>
 
-#include <stdint.h>
-#include <drivers/dev/nvme/nvme.h>
-
-struct nvme_namespace_dri_args {
-	struct controller_state *state;
-	int namespace;
-	int command_set;
+ARC_REGISTER_DRIVER(0, ext2, directory) = {
+        .init = dridefs_int_func_empty,
+	.uninit = dridefs_int_func_empty,
+	.write = dridefs_size_t_func_empty,
+	.read = dridefs_size_t_func_empty,
+	.seek = dridefs_int_func_empty,
+	.rename = dridefs_int_func_empty,
+	.stat = dridefs_int_func_empty,
+	.control = dridefs_void_func_empty,
+	.create = dridefs_int_func_empty,
+	.remove = dridefs_int_func_empty,
+	.locate = dridefs_void_func_empty,
 };
-
-#endif

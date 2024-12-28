@@ -24,7 +24,7 @@
  *
  * @DESCRIPTION
 */
-#include <drivers/dev/partition_dummy.h>
+#include <drivers/sysdev/partition_dummy.h>
 #include <lib/resource.h>
 #include <global.h>
 #include <mm/allocator.h>
@@ -111,9 +111,8 @@ static size_t write_partition_dummy(void *buffer, size_t size, size_t count, str
 	return vfs_write(buffer, size, count, state->drive);
 }
 
-static int stat_partition_dummy(struct ARC_Resource *res, char *filename, struct stat *stat, void **hint) {
+static int stat_partition_dummy(struct ARC_Resource *res, char *filename, struct stat *stat) {
 	(void)filename;
-	(void)hint;
 
 	if (res == NULL || stat == NULL) {
 		return -1;

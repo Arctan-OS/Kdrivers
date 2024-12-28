@@ -1,5 +1,5 @@
 /**
- * @file pci.h
+ * @file namespace.h
  *
  * @author awewsomegamer <awewsomegamer@gmail.com>
  *
@@ -24,15 +24,16 @@
  *
  * @DESCRIPTION
 */
-#ifndef ARC_DRIVERS_DEV_NVME_PCI_H
-#define ARC_DRIVERS_DEV_NVME_PCI_H
+#ifndef ARC_DRIVERS_SYSDEV_NVME_NAMESPACE_H
+#define ARC_DRIVERS_SYSDEV_NVME_NAMESPACE_H
 
-#include <arch/pci/pci.h>
-#include <drivers/dev/nvme/nvme.h>
+#include <stdint.h>
+#include <drivers/sysdev/nvme/nvme.h>
 
-int nvme_pci_submit_command(struct controller_state *state, int queue, struct qs_entry *cmd);
-int nvme_pci_poll_completion(struct controller_state *state, struct qs_entry *cmd, struct qc_entry *ret);
-
-int init_nvme_pci(struct controller_state *state, struct ARC_PCIHeader *header);
+struct nvme_namespace_dri_args {
+	struct controller_state *state;
+	int namespace;
+	int command_set;
+};
 
 #endif

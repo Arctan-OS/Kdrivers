@@ -24,8 +24,8 @@
  *
  * @DESCRIPTION
 */
-#include <drivers/dev/nvme/pci.h>
-#include <drivers/dev/nvme/nvme.h>
+#include <drivers/sysdev/nvme/pci.h>
+#include <drivers/sysdev/nvme/nvme.h>
 #include <arch/pager.h>
 #include <mm/pmm.h>
 #include <lib/util.h>

@@ -26,8 +26,8 @@
  * Driver implementing functions to manage I/O namespaces in an NVM subsystem.
 */
 #include <lib/resource.h>
-#include <drivers/dev/nvme/namespace.h>
-#include <drivers/dev/nvme/nvme.h>
+#include <drivers/sysdev/nvme/namespace.h>
+#include <drivers/sysdev/nvme/nvme.h>
 #include <mm/pmm.h>
 #include <global.h>
 #include <mm/allocator.h>
@@ -229,9 +229,8 @@ static size_t write_nvme_namespace(void *buffer, size_t size, size_t count, stru
 	return (size * count);
 }
 
-static int stat_nvme_namespace(struct ARC_Resource *res, char *filename, struct stat *stat, void **hint) {
+static int stat_nvme_namespace(struct ARC_Resource *res, char *filename, struct stat *stat) {
 	(void)filename;
-	(void)hint;
 
 	if (res == NULL || stat == NULL) {
 		return -1;

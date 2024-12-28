@@ -24,8 +24,8 @@
  *
  * @DESCRIPTION
 */
-#ifndef ARC_DRIVERS_DEV_NVME_NVME_H
-#define ARC_DRIVERS_DEV_NVME_NVME_H
+#ifndef ARC_DRIVERS_SYSDEV_NVME_NVME_H
+#define ARC_DRIVERS_SYSDEV_NVME_NVME_H
 
 #include <stdint.h>
 #include <stddef.h>

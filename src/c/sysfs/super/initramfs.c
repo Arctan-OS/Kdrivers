@@ -89,21 +89,6 @@ static void *initramfs_find_file(void *fs, char *filename) {
 	return NULL;
 }
 
-static int initramfs_internal_stat(struct ARC_HeaderCPIO *header, struct stat *stat) {
-	stat->st_uid = header->uid;
-	stat->st_gid = header->gid;
-	stat->st_mode = header->mode;
-	stat->st_dev = header->device;
-	stat->st_ino = header->inode;
-	stat->st_nlink = header->nlink;
-	stat->st_rdev = header->rdev;
-	stat->st_size = ARC_DATA_SIZE(header);
-	stat->st_mtim.tv_nsec = 0;
-	stat->st_mtim.tv_sec = (header->mod_time[0] << 16) | header->mod_time[1];
-
-	return 0;
-}
-
 static int initramfs_init(struct ARC_Resource *res, void *args) {
 	struct internal_driver_state *state = (struct internal_driver_state *)alloc(sizeof(*state));
 
@@ -115,17 +100,12 @@ static int initramfs_init(struct ARC_Resource *res, void *args) {
 }
 
 static int initramfs_uninit(struct ARC_Resource *res) {
-	mutex_lock(&res->dri_state_mutex);
 	free(res->driver_state);
 
 	return 0;
 }
 
-static int initramfs_stat(struct ARC_Resource *res, char *filename, struct stat *stat, void **hint) {
-	if (hint != NULL) {
-		*hint = NULL;
-	}
-
+static int initramfs_stat(struct ARC_Resource *res, char *filename, struct stat *stat) {
 	if (res == NULL || stat == NULL) {
 		return 1;
 	}
@@ -143,22 +123,27 @@ static int initramfs_stat(struct ARC_Resource *res, char *filename, struct stat 
 		return 1;
 	}
 
-	return initramfs_internal_stat(header, stat);
+	stat->st_uid = header->uid;
+	stat->st_gid = header->gid;
+	stat->st_mode = header->mode;
+	stat->st_dev = header->device;
+	stat->st_ino = header->inode;
+	stat->st_nlink = header->nlink;
+	stat->st_rdev = header->rdev;
+	stat->st_size = ARC_DATA_SIZE(header);
+	stat->st_mtim.tv_nsec = 0;
+	stat->st_mtim.tv_sec = (header->mod_time[0] << 16) | header->mod_time[1];
+
+	return 0;
 }
 
-static void *initramfs_locate(struct ARC_Resource *res, char *filename, void *hint) {
-	(void)hint;
-
+static void *initramfs_locate(struct ARC_Resource *res, char *filename) {
 	if (res == NULL || filename == NULL) {
 		return NULL;
 	}
 
-	mutex_lock(&res->dri_state_mutex);
-
 	struct internal_driver_state *state = (struct internal_driver_state *)res->driver_state;
 	void *ret = initramfs_find_file(state->initramfs_base, filename);
-
-	mutex_unlock(&res->dri_state_mutex);
 
 	return ret;
 }
@@ -174,4 +159,17 @@ ARC_REGISTER_DRIVER(0, initramfs, super) = {
 	.create = dridefs_int_func_empty,
 	.remove = dridefs_int_func_empty,
 	.locate = initramfs_locate,
+};
+
+ARC_REGISTER_DRIVER(0, initramfs, directory) = {
+	.init = dridefs_int_func_empty,
+	.uninit = dridefs_int_func_empty,
+	.read = dridefs_size_t_func_empty,
+	.write = dridefs_size_t_func_empty,
+	.seek = dridefs_int_func_empty,
+	.rename = dridefs_int_func_empty,
+	.stat = dridefs_int_func_empty,
+	.create = dridefs_int_func_empty,
+	.remove = dridefs_int_func_empty,
+	.locate = dridefs_void_func_empty,
 };

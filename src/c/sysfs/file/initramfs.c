@@ -58,21 +58,6 @@ struct internal_driver_state {
 	void *base;
 };
 
-static int initramfs_internal_stat(struct ARC_HeaderCPIO *header, struct stat *stat) {
-	stat->st_uid = header->uid;
-	stat->st_gid = header->gid;
-	stat->st_mode = header->mode;
-	stat->st_dev = header->device;
-	stat->st_ino = header->inode;
-	stat->st_nlink = header->nlink;
-	stat->st_rdev = header->rdev;
-	stat->st_size = ARC_DATA_SIZE(header);
-	stat->st_mtim.tv_nsec = 0;
-	stat->st_mtim.tv_sec = (header->mod_time[0] << 16) | header->mod_time[1];
-
-	return 0;
-}
-
 static int initramfs_init(struct ARC_Resource *res, void *args) {
 	struct internal_driver_state *state = (struct internal_driver_state *)alloc(sizeof(*state));
 
@@ -147,12 +132,8 @@ static int initramfs_seek(struct ARC_File *file, struct ARC_Resource *res) {
 	return 0;
 }
 
-static int initramfs_stat(struct ARC_Resource *res, char *filename, struct stat *stat, void **hint) {
+static int initramfs_stat(struct ARC_Resource *res, char *filename, struct stat *stat) {
 	(void)filename;
-
-	if (hint != NULL) {
-		*hint = NULL;
-	}
 
 	if (res == NULL || stat == NULL) {
 		return 1;
@@ -164,7 +145,20 @@ static int initramfs_stat(struct ARC_Resource *res, char *filename, struct stat 
 		return 2;
 	}
 
-	return initramfs_internal_stat(state->base, stat);
+	struct ARC_HeaderCPIO *header = (struct ARC_HeaderCPIO *)state->base;
+
+	stat->st_uid = header->uid;
+	stat->st_gid = header->gid;
+	stat->st_mode = header->mode;
+	stat->st_dev = header->device;
+	stat->st_ino = header->inode;
+	stat->st_nlink = header->nlink;
+	stat->st_rdev = header->rdev;
+	stat->st_size = ARC_DATA_SIZE(header);
+	stat->st_mtim.tv_nsec = 0;
+	stat->st_mtim.tv_sec = (header->mod_time[0] << 16) | header->mod_time[1];
+
+	return 0;
 }
 
 ARC_REGISTER_DRIVER(0, initramfs, file) = {
