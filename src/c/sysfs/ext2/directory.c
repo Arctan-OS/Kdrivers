@@ -1,5 +1,5 @@
 /**
- * @file ext2.c
+ * @file directory.c
  *
  * @author awewsomegamer <awewsomegamer@gmail.com>
  *

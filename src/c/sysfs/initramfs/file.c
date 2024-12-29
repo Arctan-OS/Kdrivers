@@ -1,5 +1,5 @@
 /**
- * @file initramfs.c
+ * @file file.c
  *
  * @author awewsomegamer <awewsomegamer@gmail.com>
  *
@@ -54,7 +54,6 @@ struct ARC_HeaderCPIO {
 }__attribute__((packed));
 
 struct internal_driver_state {
-	struct ARC_Resource *resource;
 	void *base;
 };
 
@@ -66,7 +65,6 @@ static int initramfs_init(struct ARC_Resource *res, void *args) {
 	}
 
 	state->base = args;
-	state->resource = res;
 	res->driver_state = state;
 
 	return 0;

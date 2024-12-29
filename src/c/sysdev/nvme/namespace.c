@@ -166,12 +166,15 @@ static size_t read_nvme_namespace(void *buffer, size_t size, size_t count, struc
 	size_t read = 0;
 
 	while (read < size * count) {
+		uint32_t lba = (file->offset + read) / state->lba_size;
+		size_t jank = (file->offset + read) - (lba * state->lba_size);
+
 		struct qs_entry cmd = {
 	                .cdw0.opcode = 0x2,
 			.prp.entry1 = ARC_HHDM_TO_PHYS(data),
 			.mptr = ARC_HHDM_TO_PHYS(meta),
 			.cdw12 = (PAGE_SIZE / state->lba_size) - 1,
-			.cdw10 = (file->offset + read) / state->lba_size,
+			.cdw10 = lba,
 			.nsid = state->namespace
                 };
 
@@ -179,7 +182,7 @@ static size_t read_nvme_namespace(void *buffer, size_t size, size_t count, struc
 		nvme_poll_completion(state->state, &cmd, NULL);
 
 		size_t copy_size = min(PAGE_SIZE, size * count - read);
-		memcpy(buffer + read, data, copy_size);
+		memcpy(buffer + read, data + jank, copy_size);
 		read += copy_size;
 	}
 
@@ -205,18 +208,30 @@ static size_t write_nvme_namespace(void *buffer, size_t size, size_t count, stru
 
 	while (written < size * count) {
 		size_t copy_size = min(PAGE_SIZE, size * count - written);
-		memset(data, 0, PAGE_SIZE);
-		memcpy(data, buffer + written, copy_size);
+		uint32_t lba = (file->offset + written) / state->lba_size;
+		size_t jank = (file->offset + written) - (lba * state->lba_size);
 
 		struct qs_entry cmd = {
-	                .cdw0.opcode = 0x1,
+	                .cdw0.opcode = 0x2,
 			.prp.entry1 = ARC_HHDM_TO_PHYS(data),
 			.mptr = ARC_HHDM_TO_PHYS(meta),
 			.cdw12 = (PAGE_SIZE / state->lba_size) - 1,
-			.cdw10 = (file->offset + written) / state->lba_size,
+			.cdw10 = lba,
 			.nsid = state->namespace
                 };
 
+		// TODO: Could there be a way to cache the "off-cuts" of the read function
+		//       to use here, such that the drive does not have to be re-read in the
+		//       event that an lba is not fully filled or begins writing at an offset
+		//       not aligned to state->lba_size?
+		if (copy_size < state->lba_size || jank > 0) {
+			nvme_submit_command(state->state, state->ioqpair, &cmd);
+			nvme_poll_completion(state->state, &cmd, NULL);
+		}
+
+		memcpy(data + jank, buffer + written, copy_size);
+
+		cmd.cdw0.opcode = 0x1;
 		nvme_submit_command(state->state, state->ioqpair, &cmd);
 		nvme_poll_completion(state->state, &cmd, NULL);
 
