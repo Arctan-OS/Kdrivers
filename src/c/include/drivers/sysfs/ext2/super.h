@@ -29,6 +29,7 @@
 
 #include <stdint.h>
 #include <global.h>
+#include <drivers/sysfs/ext2/util.h>
 
 #define EXT2_SIG 0xEF53
 
@@ -37,9 +38,6 @@
 
 #define EXT2_INODE2_TABLE_IDX(__inode, __state) \
 	((__inode - 1) % __state->super.inodes_per_group)
-
-#define EXT2_INODE2_BLOCK(__inode, __state) \
-	(EXT2_INODE2_TABLE_IDX(__inode, __state) / __state->block_size)
 
 struct ext2_super_block {
 	uint32_t total_inodes;
@@ -87,8 +85,6 @@ struct ext2_super_block {
 	uint8_t resv1[788];
 }__attribute__((packed));
 
-STATIC_ASSERT(sizeof(struct ext2_super_block), "superblock size mismatch");
-
 struct ext2_block_group_desc {
 	uint32_t usage_bmp_block; // block address
 	uint32_t usage_bmp_inode; // block address
@@ -99,39 +95,18 @@ struct ext2_block_group_desc {
 	uint8_t resv0[14];
 }__attribute__((packed));
 
-struct ext2_inode {
-	uint16_t type_perms;
-	uint16_t uid;
-	uint32_t size_low;
-	uint32_t last_access;
-	uint32_t creation;
-	uint32_t last_mod;
-	uint32_t deletion;
-	uint16_t gid;
-	uint16_t hard_link_count;
-	uint32_t sectors_used;
-	uint32_t flags;
-	uint32_t os_specific0;
-	uint32_t dbp[12];
-	uint32_t sibp;
-	uint32_t dibp;
-	uint32_t tibp;
-	uint32_t gen_number;
-	uint32_t ext_acl; // Reserved in ext2 version 0
-	uint32_t ext_dynamic; // File: upper 32-bits of file size; Directoy: ACL
-	uint32_t frag_block_addr;
-	uint8_t os_specific1[12];
-}__attribute__((packed));
+struct ext2_super_driver_state {
+	char *parition_path;
+	struct ext2_block_group_desc *descriptor_table;
+	struct ext2_basic_driver_state basic;
+	struct ext2_super_block super;
+};
 
-struct ext2_dir_ent {
-	uint32_t inode;
-	uint16_t total_size;
-	uint8_t lower_name_len;
-	union {
-		uint8_t type;
-		uint8_t upper_name_len;
-	} u1;
-	char name[];
-}__attribute__((packed));
+struct ext2_locate_args {
+	struct ext2_inode *inode;
+	struct ext2_super_driver_state *super;
+};
+
+struct ext2_inode *ext2_read_inode(struct ext2_super_driver_state *state, uint64_t inode);
 
 #endif

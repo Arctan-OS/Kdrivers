@@ -182,6 +182,11 @@ static size_t read_nvme_namespace(void *buffer, size_t size, size_t count, struc
 		nvme_poll_completion(state->state, &cmd, NULL);
 
 		size_t copy_size = min(PAGE_SIZE, size * count - read);
+
+		if (copy_size + jank > PAGE_SIZE) {
+			copy_size -= jank;
+		}
+
 		memcpy(buffer + read, data + jank, copy_size);
 		read += copy_size;
 	}
@@ -227,6 +232,10 @@ static size_t write_nvme_namespace(void *buffer, size_t size, size_t count, stru
 		if (copy_size < state->lba_size || jank > 0) {
 			nvme_submit_command(state->state, state->ioqpair, &cmd);
 			nvme_poll_completion(state->state, &cmd, NULL);
+		}
+
+		if (copy_size + jank > PAGE_SIZE) {
+			copy_size -= jank;
 		}
 
 		memcpy(data + jank, buffer + written, copy_size);
