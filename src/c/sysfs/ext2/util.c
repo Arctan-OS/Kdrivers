@@ -1,3 +1,29 @@
+/**
+ * @file util.c
+ *
+ * @author awewsomegamer <awewsomegamer@gmail.com>
+ *
+ * @LICENSE
+ * Arctan - Operating System Kernel
+ * Copyright (C) 2023-2025 awewsomegamer
+ *
+ * This file is part of Arctan.
+ *
+ * Arctan is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; version 2
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ *
+ * @DESCRIPTION
+*/
 #include <drivers/sysfs/ext2/util.h>
 #include <mm/allocator.h>
 #include <lib/util.h>
@@ -6,107 +32,97 @@
 size_t ext2_read_inode_data(struct ext2_basic_driver_state *state, uint8_t *buffer, uint64_t offset, size_t size) {
 	if (state == NULL || buffer == NULL || size == 0) {
 		return 0;
-
 	}
 
-	uint64_t starting_block_ptr = offset / state->block_size;
-	uint64_t block_ptr_count = ALIGN(size, state->block_size) / state->block_size;
-	uint64_t read = 0;
+	size_t read = 0;
+	int ptr_count = state->block_size / 4;
 
-	if (starting_block_ptr < 12) {
-		uint64_t ending_block = min(starting_block_ptr + block_ptr_count, 12);
-
-		for (uint64_t i = starting_block_ptr; i < ending_block; i++) {
-			size_t copy_size = min(state->block_size, size - read);
-
-			vfs_seek(state->partition, offset + read + (state->node->dbp[i] * state->block_size), SEEK_SET);
-			if (vfs_read(buffer + read, copy_size, 1, state->partition) != copy_size) {
-				break;
-			}
-
-			read += copy_size;
-		}
-
-		if (read == size) {
-			return read;
-		}
-
-		block_ptr_count -= 12 - starting_block_ptr;
-		starting_block_ptr = 12;
+	uint32_t *singly_ind = NULL;
+	if (state->node->sibp != 0 && (singly_ind = alloc(state->block_size)) == NULL) {
+		goto exit;
 	}
 
-	starting_block_ptr -= 12;
-
-	uint64_t ptr_count = (state->block_size / 4);
-
-	uint8_t *triply_ind = alloc(state->block_size);
-
-	if (triply_ind == NULL) {
-		return 0;
+	uint32_t *doubly_ind = NULL;
+	uint64_t last_doubly_idx = 0;
+	if (state->node->dibp != 0 && (doubly_ind = alloc(state->block_size)) == NULL) {
+		goto exit;
 	}
 
-	vfs_seek(state->partition, state->node->tibp * state->block_size, SEEK_SET);
-	vfs_read(triply_ind, state->block_size, 1, state->partition);
-
-	uint8_t *doubly_ind = alloc(state->block_size);
-
-	if (doubly_ind == NULL) {
-		free(triply_ind);
-		return 0;
+	uint32_t *triply_ind = NULL;
+	uint64_t last_triply_idx = 0;
+	if (state->node->tibp != 0 && (triply_ind = alloc(state->block_size)) == NULL) {
+		goto exit;
 	}
 
-	vfs_seek(state->partition, state->node->sibp * state->block_size, SEEK_SET);
-	vfs_read(doubly_ind, state->block_size, 1, state->partition);
-
-	uint8_t *singly_ind = alloc(state->block_size);
-
-	if (singly_ind == NULL) {
-		free(triply_ind);
-		free(doubly_ind);
-		return 0;
+	if (singly_ind != NULL) {
+		vfs_seek(state->partition, state->node->sibp * state->block_size, SEEK_SET);
+		vfs_read(singly_ind, state->block_size, 1, state->partition);
 	}
 
-	vfs_seek(state->partition, state->node->dibp * state->block_size, SEEK_SET);
-	vfs_read(singly_ind, state->block_size, 1, state->partition);
+	if (doubly_ind != NULL) {
+		vfs_seek(state->partition, state->node->dibp * state->block_size, SEEK_SET);
+		vfs_read(doubly_ind, state->block_size, 1, state->partition);
+	}
+
+	// NOTE: For some reason if this table were laoded on a read on dpb[11], it would
+	//       cause an error. Reads on dpb[10:0] would be fine. May become an issue in
+	//       the future if the triply indirect table is also present
+	if (triply_ind != NULL) {
+		vfs_seek(state->partition, state->node->tibp * state->block_size, SEEK_SET);
+		vfs_read(triply_ind, state->block_size, 1, state->partition);
+	}
 
 	while (read < size) {
-		size_t copy_size = min(state->block_size, size - read);
-		uint64_t singly_idx = starting_block_ptr % ptr_count;
-		uint64_t doubly_idx = (starting_block_ptr / ptr_count) % ptr_count;
-		uint64_t triply_idx = (starting_block_ptr / (ptr_count*ptr_count)) % ptr_count;
+		uint64_t block_idx = (offset + read) / state->block_size;
+		uint64_t jank = (offset + read) - (block_idx * state->block_size);
+		size_t copy_size = min(state->block_size - jank, size - read);
 
-		if (doubly_idx > 1) {
-			vfs_seek(state->partition, triply_ind[triply_idx] * state->block_size, SEEK_SET);
-			if (vfs_read(doubly_ind, state->block_size, 1, state->partition) != state->block_size) {
+
+		if (block_idx < 12) {
+			vfs_seek(state->partition, state->node->dbp[block_idx] * state->block_size + jank, SEEK_SET);
+			vfs_read(buffer + read, 1, copy_size, state->partition);
+		} else {
+			uint64_t singly_idx = (block_idx - 12) % ptr_count;
+			uint64_t doubly_idx = (block_idx - 12) / ptr_count;
+			uint64_t triply_idx = (block_idx - 12) / (ptr_count*ptr_count);
+
+			if (triply_ind != NULL && triply_idx >= 1 && triply_idx != last_triply_idx) {
+				vfs_seek(state->partition, triply_ind[(triply_idx - 1) % ptr_count] * state->block_size, SEEK_SET);
+				if (vfs_read(doubly_ind, state->block_size, 1, state->partition) != state->block_size) {
+					break;
+				}
+			}
+
+			if (doubly_ind != NULL && doubly_idx >= 1 && doubly_idx != last_doubly_idx) {
+				vfs_seek(state->partition, doubly_ind[(doubly_idx - 1) % ptr_count] * state->block_size, SEEK_SET);
+				if (vfs_read(singly_ind, state->block_size, 1, state->partition) != state->block_size) {
+					break;
+				}
+			}
+
+			vfs_seek(state->partition, singly_ind[singly_idx] * state->block_size + jank, SEEK_SET);
+			if (vfs_read(buffer + read, 1, copy_size, state->partition) != copy_size) {
 				break;
 			}
-		}
 
-		if (doubly_idx >= 1) {
-			vfs_seek(state->partition, doubly_ind[doubly_idx] * state->block_size, SEEK_SET);
-			if (vfs_read(singly_ind, state->block_size, 1, state->partition) != state->block_size) {
-				break;
-			}
-		}
-
-		vfs_seek(state->partition, singly_ind[singly_idx] * state->block_size, SEEK_SET);
-		if (vfs_read(buffer, copy_size, 1, state->partition) != copy_size) {
-			break;
+			last_doubly_idx = doubly_idx;
+			last_triply_idx = triply_idx;
 		}
 
 		read += copy_size;
 	}
 
-	if (triply_ind != NULL) {
-		free(triply_ind);
+	exit:;
+	if (singly_ind != NULL) {
+		free(singly_ind);
 	}
 
 	if (doubly_ind != NULL) {
 		free(doubly_ind);
 	}
 
-	if (singly_ind != NULL) {
-		free(singly_ind);
+	if (triply_ind != NULL) {
+		free(triply_ind);
 	}
 
 	return read;
