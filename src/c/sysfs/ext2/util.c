@@ -29,116 +29,256 @@
 #include <lib/util.h>
 #include <fs/vfs.h>
 
-size_t ext2_read_inode_data(struct ext2_basic_driver_state *state, uint8_t *buffer, uint64_t offset, size_t size) {
-	if (state == NULL || buffer == NULL || size == 0) {
+// TODO: For the below three functions revise naming
+static uint32_t ext2_load_block(uint32_t *block,
+				uint32_t (*create_callback)(void *, uint32_t inode), uint32_t inode, void *create_arg) {
+	if (*block != 0) {
+		return *block;
+	}
+
+	if (create_callback == NULL) {
 		return 0;
 	}
 
-	size_t read = 0;
-	int ptr_count = state->block_size / 4;
+	return create_callback(create_arg, inode);
+}
 
-	uint32_t *singly_ind = NULL;
-	if (state->node->sibp != 0 && (singly_ind = alloc(state->block_size)) == NULL) {
-		goto exit;
+static int ext2_load_read_block(struct ext2_basic_driver_state *state, uint32_t *block, uint32_t **out,
+				uint32_t (*create_callback)(void *, uint32_t inode), uint32_t inode, void *create_arg) {
+	if (state == NULL) {
+		return -1;
 	}
 
-	uint32_t *doubly_ind = NULL;
-	uint64_t last_doubly_idx = 0;
-	if (state->node->dibp != 0 && (doubly_ind = alloc(state->block_size)) == NULL) {
-		goto exit;
+	if (*out == NULL && (*out = (uint32_t *)alloc(state->block_size)) == NULL) {
+		return -2;
 	}
 
-	uint32_t *triply_ind = NULL;
-	uint64_t last_triply_idx = 0;
-	if (state->node->tibp != 0 && (triply_ind = alloc(state->block_size)) == NULL) {
-		goto exit;
+	uint32_t _block = ext2_load_block(block, create_callback, inode, create_arg);
+
+	if (_block != 0) {
+		vfs_seek(state->partition, _block * state->block_size, SEEK_SET);
+		vfs_read(*out, 1, state->block_size, state->partition);
+		return 0;
 	}
 
-	if (singly_ind != NULL) {
-		vfs_seek(state->partition, state->node->sibp * state->block_size, SEEK_SET);
-		vfs_read(singly_ind, state->block_size, 1, state->partition);
+	return -3;
+}
+
+static size_t ext2_traverse_blocks(struct ext2_basic_driver_state *state, uint64_t offset, size_t size,
+				   size_t (*do_callback)(struct ext2_basic_driver_state *, uint32_t block, uint64_t traversed, uint64_t jank, void *), void *do_arg,
+				   uint32_t (*create_callback)(void *, uint32_t inode), void *create_arg) {
+	if (state == NULL || size == 0) {
+		ARC_DEBUG(ERR, "Failed to traverse blocks improper parameters (%p %d)\n", state, size);
+		return 0;
 	}
 
-	if (doubly_ind != NULL) {
-		vfs_seek(state->partition, state->node->dibp * state->block_size, SEEK_SET);
-		vfs_read(doubly_ind, state->block_size, 1, state->partition);
-	}
+	uint64_t traversed = 0;
+	uint64_t ptr_count = state->block_size / 4;
 
-	// NOTE: For some reason if this table were laoded on a read on dpb[11], it would
-	//       cause an error. Reads on dpb[10:0] would be fine. May become an issue in
-	//       the future if the triply indirect table is also present
-	if (triply_ind != NULL) {
-		vfs_seek(state->partition, state->node->tibp * state->block_size, SEEK_SET);
-		vfs_read(triply_ind, state->block_size, 1, state->partition);
-	}
+	uint32_t *sibp = NULL;
+	uint64_t last_doubly = 0;
+	uint32_t *dibp = NULL;
+	uint64_t last_triply = 0;
+	uint32_t *tibp = NULL;
 
-	while (read < size) {
-		uint64_t block_idx = (offset + read) / state->block_size;
-		uint64_t jank = (offset + read) - (block_idx * state->block_size);
-		size_t copy_size = min(state->block_size - jank, size - read);
+	while (traversed < size) {
+		uint64_t base_blk_idx = (traversed + offset) / state->block_size;
+		uint64_t jank = (traversed + offset) - (base_blk_idx * state->block_size);
 
+		if (base_blk_idx < 12) {
+			uint32_t block = ext2_load_block(&state->node->dbp[base_blk_idx], create_callback, state->inode, create_arg);
 
-		if (block_idx < 12) {
-			vfs_seek(state->partition, state->node->dbp[block_idx] * state->block_size + jank, SEEK_SET);
-			vfs_read(buffer + read, 1, copy_size, state->partition);
+			if (block == 0) {
+				ARC_DEBUG(ERR, "Failed to get next block (index: %lu)\n", base_blk_idx);
+				goto exit;
+			}
+
+			traversed += do_callback(state, block, traversed, jank, do_arg);
 		} else {
-			uint64_t singly_idx = (block_idx - 12) % ptr_count;
-			uint64_t doubly_idx = (block_idx - 12) / ptr_count;
-			uint64_t triply_idx = (block_idx - 12) / (ptr_count*ptr_count);
+			uint64_t singly_idx = base_blk_idx - 12;
+			uint64_t doubly_idx = singly_idx / state->block_size;
+			uint64_t triply_idx = (doubly_idx / state->block_size);
+			singly_idx %= ptr_count;
 
-			if (triply_ind != NULL && triply_idx >= 1 && triply_idx != last_triply_idx) {
-				vfs_seek(state->partition, triply_ind[(triply_idx - 1) % ptr_count] * state->block_size, SEEK_SET);
-				if (vfs_read(doubly_ind, state->block_size, 1, state->partition) != state->block_size) {
-					break;
+			if ((doubly_idx | triply_idx) == 0) {
+				if (sibp == NULL && ext2_load_read_block(state, &state->node->sibp, &sibp, create_callback, state->inode, create_arg) != 0) {
+					ARC_DEBUG(ERR, "Failed to load and read node->sibp (index: %lu)", base_blk_idx);
+					goto exit;
+				}
+
+				goto skip_dibp;
+			} else if (doubly_idx >= ptr_count + 1) {
+				if (tibp == NULL && ext2_load_read_block(state, &state->node->tibp, &tibp, create_callback, state->inode, create_arg) != 0) {
+					ARC_DEBUG(ERR, "Failed to load and read node->tibp (index: %lu)", base_blk_idx);
+					goto exit;
+				}
+
+				uint32_t block = ext2_load_block(&tibp[(triply_idx - 1) % ptr_count], create_callback, state->inode, create_arg);
+
+				if (block == 0) {
+					ARC_DEBUG(ERR, "Failed to load and read node->tibp[%lu] (index: %lu)", (triply_idx - 1) % ptr_count, base_blk_idx);
+					goto exit;
+				}
+
+				if (last_triply != 0 && block != last_triply) {
+					vfs_seek(state->partition, last_triply * state->block_size, SEEK_SET);
+					vfs_write(dibp, 1, state->block_size, state->partition);
+				} else if (block == last_triply) {
+					goto do_dibp;
+				}
+
+				ext2_load_read_block(state, &tibp[(triply_idx - 1) % ptr_count], &dibp, create_callback, state->inode, create_arg);
+
+				last_triply = block;
+			} else {
+				// Assume 1 <= doubly_idx <= 1024 and triply_idx = 0
+				if (dibp == NULL && ext2_load_read_block(state, &state->node->dibp, &dibp, create_callback, state->inode, create_arg) != 0) {
+					ARC_DEBUG(ERR, "Failed to load and read node->dibp (index: %lu)", base_blk_idx);
+					goto exit;
 				}
 			}
 
-			if (doubly_ind != NULL && doubly_idx >= 1 && doubly_idx != last_doubly_idx) {
-				vfs_seek(state->partition, doubly_ind[(doubly_idx - 1) % ptr_count] * state->block_size, SEEK_SET);
-				if (vfs_read(singly_ind, state->block_size, 1, state->partition) != state->block_size) {
-					break;
-				}
+			do_dibp:;
+
+			uint32_t block = ext2_load_block(&dibp[(doubly_idx - 1) % ptr_count], create_callback, state->inode, create_arg);
+
+			if (block == 0) {
+				ARC_DEBUG(ERR, "Failed to load and read dibp[%lu] (index: %lu)", (doubly_idx - 1) % ptr_count, base_blk_idx);
+				goto exit;
 			}
 
-			vfs_seek(state->partition, singly_ind[singly_idx] * state->block_size + jank, SEEK_SET);
-			if (vfs_read(buffer + read, 1, copy_size, state->partition) != copy_size) {
-				break;
+			if (last_doubly != 0 && block != last_doubly) {
+				vfs_seek(state->partition, last_doubly * state->block_size, SEEK_SET);
+				vfs_write(sibp, 1, state->block_size, state->partition);
+			} else if (block == last_doubly) {
+				goto skip_dibp;
 			}
 
-			last_doubly_idx = doubly_idx;
-			last_triply_idx = triply_idx;
+			ext2_load_read_block(state, &dibp[(doubly_idx - 1) % ptr_count], &sibp, create_callback, state->inode, create_arg);
+
+			last_doubly = block;
+
+			skip_dibp:;
+
+			uint32_t resolve_block = ext2_load_block(&sibp[singly_idx], create_callback, state->inode, create_arg);
+
+			if (resolve_block == 0) {
+				ARC_DEBUG(ERR, "Failed to load and read sibp[%lu] (index: %lu)", singly_idx, base_blk_idx);
+				goto exit;
+			}
+
+			traversed += do_callback(state, resolve_block, traversed, jank, do_arg);
 		}
-
-		read += copy_size;
 	}
 
 	exit:;
-	if (singly_ind != NULL) {
-		free(singly_ind);
+	if (tibp != NULL) {
+		vfs_seek(state->partition, state->node->tibp * state->block_size, SEEK_SET);
+		vfs_write(tibp, 1, state->block_size, state->partition);
+		free(tibp);
 	}
 
-	if (doubly_ind != NULL) {
-		free(doubly_ind);
+	if (dibp != NULL) {
+		if (last_triply == 0) {
+			vfs_seek(state->partition, state->node->dibp * state->block_size, SEEK_SET);
+		} else {
+			vfs_seek(state->partition, last_triply * state->block_size, SEEK_SET);
+		}
+
+		vfs_write(dibp, 1, state->block_size, state->partition);
+
+		free(dibp);
 	}
 
-	if (triply_ind != NULL) {
-		free(triply_ind);
+	if (sibp != NULL) {
+		if (last_doubly == 0) {
+			vfs_seek(state->partition, state->node->sibp * state->block_size, SEEK_SET);
+		} else {
+			vfs_seek(state->partition, last_doubly * state->block_size, SEEK_SET);
+		}
+
+		vfs_write(sibp, 1, state->block_size, state->partition);
+
+		free(sibp);
 	}
 
-	return read;
+	return traversed;
 }
 
-size_t ext2_write_inode_data(struct ext2_basic_driver_state *state, uint8_t *buffer, uint64_t offset, size_t size) {
-	if (state == NULL || buffer == NULL || size == 0 || MASKED_READ(state->attributes, 1, 1) == 0) {
-		return 0;
+struct internal_callback_args {
+	size_t size;
+	uint8_t *buffer;
+};
 
+static size_t ext2_read_callback(struct ext2_basic_driver_state *state, uint32_t block, uint64_t traversed, uint64_t jank, void *args) {
+	if (args == NULL) {
+		ARC_DEBUG(ERR, "Read callback failed, improper parameters (%p)", args);
+		return 0;
 	}
 
-	(void)offset;
-//	uint64_t starting_block = offset / state->block_size;
-//	uint64_t block_count = ALIGN(size, state->block_size) / state->block_size;
+	struct internal_callback_args *cast_args = args;
+
+	vfs_seek(state->partition, block * state->block_size + jank, SEEK_SET);
+	size_t copy_size = min(state->block_size - jank, cast_args->size - traversed);
+
+	return vfs_read(cast_args->buffer + traversed, 1, copy_size, state->partition);
+}
+
+size_t ext2_read_inode_data(struct ext2_basic_driver_state *state, uint8_t *buffer, uint64_t offset, size_t size) {
+	if (state == NULL || buffer == NULL || size == 0) {
+		ARC_DEBUG(ERR, "Failed to read inode data, improper parameters (%p %p %lu)\n", state, buffer, size);
+		return 0;
+	}
+
+	struct internal_callback_args args = {
+	        .buffer = buffer,
+		.size = size,
+        };
+
+	return ext2_traverse_blocks(state, offset, size, ext2_read_callback, &args, NULL, NULL);
+}
+
+static size_t ext2_write_callback(struct ext2_basic_driver_state *state, uint32_t block, uint64_t traversed, uint64_t jank, void *args) {
+	if (args == NULL) {
+		ARC_DEBUG(ERR, "Write callback failed, improper parameters (%p)\n", args);
+		return 0;
+	}
+
+	struct internal_callback_args *cast_args = args;
+
+	vfs_seek(state->partition, block * state->block_size + jank, SEEK_SET);
+	size_t copy_size = min(state->block_size - jank, cast_args->size - traversed);
+	return vfs_write(cast_args->buffer + traversed, 1, copy_size, state->partition);
+}
+
+static uint32_t ext2_create_callback(void *args, uint32_t inode) {
+	if (args == NULL || inode == 0) {
+		ARC_DEBUG(ERR, "Create callback failed, improper parameters (%p %lu)", args, inode);
+		return 0;
+	}
+
+	struct ext2_super_driver_state *state = args;
+	(void)state;
+
+	ARC_DEBUG(ERR, "EXT2 Block creation is unimplemented\n");
+
+	// TODO: Call control function in super driver to allocate new block
 
 	return 0;
+}
+
+size_t ext2_write_inode_data(struct ext2_node_driver_state *state, uint8_t *buffer, uint64_t offset, size_t size) {
+	if (state == NULL || buffer == NULL || size == 0 || MASKED_READ(state->basic.attributes, 1, 1) == 0) {
+		ARC_DEBUG(ERR, "Failed to write inode data, improper parameters (%p %p %lu %s)\n", state, buffer, size, MASKED_READ(state->basic.attributes, 1, 1) ? "Write Enabled" : "Write Disabled");
+		return 0;
+	}
+
+	struct internal_callback_args args = {
+	        .buffer = buffer,
+		.size = size,
+        };
+
+	return ext2_traverse_blocks(&state->basic, offset, size, ext2_write_callback, &args, ext2_create_callback, state->super);
 }
 
 struct internal_get_inode_in_dir_arg {
@@ -148,6 +288,7 @@ struct internal_get_inode_in_dir_arg {
 
 static int callback_get_inode_in_dir(struct ext2_dir_ent *ent, void *arg) {
 	if (ent == NULL || arg == NULL) {
+		ARC_DEBUG(ERR, "Get inode in dir callback failed, improper parameters (%p %p)\n", ent, arg);
 		return 1;
 	}
 
@@ -164,6 +305,7 @@ static int callback_get_inode_in_dir(struct ext2_dir_ent *ent, void *arg) {
 
 uint64_t ext2_get_inode_in_dir(struct ext2_basic_driver_state *dir, char *filename) {
 	if (dir == NULL || filename == NULL) {
+		ARC_DEBUG(ERR, "Get inode in dir failed, improper parameters (%p %p)\n", dir, filename);
 		return 0;
 	}
 
@@ -178,6 +320,7 @@ uint64_t ext2_get_inode_in_dir(struct ext2_basic_driver_state *dir, char *filena
 
 void ext2_list_directory(struct ext2_basic_driver_state *dir, int (*callback)(struct ext2_dir_ent *, void *arg), void *arg) {
 	if (dir == NULL || callback == NULL) {
+		ARC_DEBUG(ERR, "Failed to list directory, improper parameters (%p %p)\n", dir, callback);
 		return;
 	}
 

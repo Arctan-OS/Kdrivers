@@ -1,5 +1,5 @@
 /**
- * @file super.h
+ * @file state_defs.h
  *
  * @author awewsomegamer <awewsomegamer@gmail.com>
  *
@@ -24,14 +24,34 @@
  *
  * @DESCRIPTION
 */
-#ifndef ARC_DRIVERS_SYSFS_EXT2_UTIL_H
-#define ARC_DRIVERS_SYSFS_EXT2_UTIL_H
+#ifndef ARC_DRIVERS_SYSFS_EXT2_STATE_DEFS_H
+#define ARC_DRIVERS_SYSFS_EXT2_STATE_DEFS_H
 
-#include <drivers/sysfs/ext2/state_defs.h>
+#include <stdint.h>
+#include <global.h>
+#include <drivers/sysfs/ext2/ext2.h>
 
-size_t ext2_read_inode_data(struct ext2_basic_driver_state *state, uint8_t *buffer, uint64_t offset, size_t size);
-size_t ext2_write_inode_data(struct ext2_node_driver_state *state, uint8_t *buffer, uint64_t offset, size_t size); 
-uint64_t ext2_get_inode_in_dir(struct ext2_basic_driver_state *dir, char *filename);
-void ext2_list_directory(struct ext2_basic_driver_state *dir, int (*callback)(struct ext2_dir_ent *, void *arg), void *arg);
+struct ext2_basic_driver_state {
+	struct ARC_File *partition;
+	struct ext2_inode *node;
+	uint64_t attributes; // Bit | Description
+			     // 0   | 1: Enable caching
+			     // 1   | 1: Write enabled
+			     // 2   | 1: 64-bit inode sizes
+	size_t block_size;
+	uint32_t inode;
+};
+
+struct ext2_super_driver_state {
+	char *parition_path;
+	struct ext2_block_group_desc *descriptor_table;
+	struct ext2_basic_driver_state basic;
+	struct ext2_super_block super;
+};
+
+struct ext2_node_driver_state {
+	struct ext2_super_driver_state *super;
+	struct ext2_basic_driver_state basic;
+};
 
 #endif

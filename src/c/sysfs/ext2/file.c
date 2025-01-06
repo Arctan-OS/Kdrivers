@@ -27,24 +27,23 @@
 */
 #include <lib/resource.h>
 #include <drivers/dri_defs.h>
+#include <drivers/sysfs/ext2/util.h>
 #include <drivers/sysfs/ext2/super.h>
+#include <drivers/sysfs/ext2/state_defs.h>
 #include <mm/allocator.h>
 #include <lib/perms.h>
 #include <lib/util.h>
 
-struct ext2_file_driver_state {
-	struct ext2_super_driver_state *super;
-	struct ext2_basic_driver_state basic;
-};
-
 static int init_ext2_file(struct ARC_Resource *res, void *args) {
 	if (res == NULL || args == NULL) {
+		ARC_DEBUG(ERR, "Failed to initialize file driver, improper parameters (%p %p)\n", res, args);
 		return -1;
 	}
 
-	struct ext2_file_driver_state *state = alloc(sizeof(*state));
+	struct ext2_node_driver_state *state = alloc(sizeof(*state));
 
 	if (state == NULL) {
+		ARC_DEBUG(ERR, "Failed to allocate state\n");
 		return -2;
 	}
 
@@ -53,16 +52,20 @@ static int init_ext2_file(struct ARC_Resource *res, void *args) {
 	vfs_open(cast_args->super->parition_path, 0, ARC_STD_PERM, &state->basic.partition);
 
 	if (state->basic.partition == NULL) {
+		ARC_DEBUG(ERR, "Failed to open partition\n");
 		free(state);
 		return -3;
 	}
 
 	state->super = cast_args->super;
 	// NOTE: This was allocated by the super driver, but we own it now, we must free it
-	state->basic.node = cast_args->inode;
+	state->basic.node = cast_args->node;
+	state->basic.inode = cast_args->inode;
 	state->basic.block_size = cast_args->super->basic.block_size;
 
 	res->driver_state = state;
+
+	free(cast_args);
 
 	return 0;
 }
@@ -76,7 +79,7 @@ static size_t read_ext2_file(void *buffer, size_t size, size_t count, struct ARC
 		return 0;
  	}
 
-	struct ext2_file_driver_state *state = res->driver_state;
+	struct ext2_node_driver_state *state = res->driver_state;
 
 	return ext2_read_inode_data(&state->basic, buffer, file->offset, size * count);
 }
@@ -86,16 +89,19 @@ static size_t write_ext2_file(void *buffer, size_t size, size_t count, struct AR
 		return 0;
  	}
 
-	return size * count;
+	struct ext2_node_driver_state *state = res->driver_state;
+
+	return ext2_write_inode_data(state, buffer, file->offset, size * count);
 }
 
 static int stat_ext2_file(struct ARC_Resource *res, char *filename, struct stat *stat) {
 	(void)filename;
 	if (res == NULL || stat == NULL) {
+		ARC_DEBUG(ERR, "Failed to stat file, improper parameters (%p %p)\n", res, stat);
 		return -1;
 	}
 
-	struct ext2_file_driver_state *state = res->driver_state;
+	struct ext2_node_driver_state *state = res->driver_state;
 
 	stat->st_mode = state->basic.node->type_perms;
 	stat->st_size = state->basic.node->size_low;

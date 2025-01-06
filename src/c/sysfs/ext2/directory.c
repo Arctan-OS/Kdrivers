@@ -28,11 +28,6 @@
 #include <lib/resource.h>
 #include <drivers/sysfs/ext2/super.h>
 
-struct driver_state {
-	struct ext2_super_driver_state *super;
-	struct ext2_basic_driver_state basic;
-};
-
 ARC_REGISTER_DRIVER(0, ext2, directory) = {
         .init = dridefs_int_func_empty,
 	.uninit = dridefs_int_func_empty,
