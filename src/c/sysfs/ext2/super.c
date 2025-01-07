@@ -107,7 +107,11 @@ static int init_ext2_super(struct ARC_Resource *res, void *args) {
 	return 0;
 }
 
-static int uninit_ext2_super() {
+static int uninit_ext2_super(struct ARC_Resource *res) {
+	if (res == NULL) {
+		return -1;
+	}
+
 	return 0;
 };
 

@@ -70,8 +70,16 @@ static int init_ext2_file(struct ARC_Resource *res, void *args) {
 	return 0;
 }
 
-static int uninit_ext2_file() {
+static int uninit_ext2_file(struct ARC_Resource *res) {
+	if (res == NULL) {
+		return -1;
+	}
+
+	// TODO: Sync
+	free(res->driver_state);
+
 	return 0;
+
 };
 
 static size_t read_ext2_file(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
