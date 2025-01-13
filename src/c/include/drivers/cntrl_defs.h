@@ -1,5 +1,5 @@
 /**
- * @file state_defs.h
+ * @file cntrl_defs.h
  *
  * @author awewsomegamer <awewsomegamer@gmail.com>
  *
@@ -24,35 +24,17 @@
  *
  * @DESCRIPTION
 */
-#ifndef ARC_DRIVERS_SYSFS_EXT2_STATE_DEFS_H
-#define ARC_DRIVERS_SYSFS_EXT2_STATE_DEFS_H
+#ifndef ARC_DRIVERS_CNTRL_DEFS_H
+#define ARC_DRIVERS_CNTRL_DEFS_H
 
-#include <stdint.h>
-#include <global.h>
-#include <drivers/sysfs/ext2/ext2.h>
+#define CNTRL_CMDSET_DRIVER 0
+#define CNTRL_CMDSET_STANDARD 1
 
-struct ext2_basic_driver_state {
-	struct ARC_File *partition;
-	struct ext2_inode *node;
-	uint64_t attributes; // Bit | Description
-			     // 0   | 1: Enable caching
-			     // 1   | 1: Write enabled
-			     // 2   | 1: 64-bit inode sizes
-	size_t block_size;
-	uint32_t inode;
-};
+#define CNTRL_OPCODE_ASSOCIATE 0
+#define CNTRL_OPCODE_DISASSOCATE 1
 
-struct ext2_super_driver_state {
-	char *parition_path;
-	struct ext2_block_group_desc *descriptor_table;
-	uint64_t descriptor_count;
-	struct ext2_basic_driver_state basic;
-	struct ext2_super_block super;
-};
-
-struct ext2_node_driver_state {
-	struct ext2_super_driver_state *super;
-	struct ext2_basic_driver_state basic;
-};
+// Bit offsets
+#define CNTRL_CMDATTRS_OPSIZE 0 // 2 bits (log2(size))
+#define CNTRL_CMDATTRS_RESV0 2 // Rest of attributes
 
 #endif

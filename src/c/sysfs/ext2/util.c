@@ -64,6 +64,10 @@ static int ext2_load_read_block(struct ext2_basic_driver_state *state, uint32_t 
 	return -3;
 }
 
+// TODO: Could it be possible to break this up into further components
+//       such that it will also allow for the implementation of deletions
+//       or should it be kept as is and the delete function given its own
+//       way to traverse the blocks and tables?
 static size_t ext2_traverse_blocks(struct ext2_basic_driver_state *state, uint64_t offset, size_t size,
 				   size_t (*do_callback)(struct ext2_basic_driver_state *, uint32_t block, uint64_t traversed, uint64_t jank, void *), void *do_arg,
 				   uint32_t (*create_callback)(void *, uint32_t inode), void *create_arg) {

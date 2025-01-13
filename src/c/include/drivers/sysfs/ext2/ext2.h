@@ -63,7 +63,7 @@ struct ext2_super_block {
 	uint16_t superblock_group;
 	uint32_t opt_features;
 	uint32_t required_features;
-	uint32_t unsupported_features;
+	uint32_t write_features;
 	uint8_t fs_id[16];
 	uint8_t vol_name[16];
 	uint8_t last_path[64];
