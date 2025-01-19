@@ -225,7 +225,7 @@ int init_nvme_pci(struct controller_state *state, struct ARC_PCIHeader *header) 
 		return -1;
 	}
 
-	if (pager_map(ARC_PHYS_TO_HHDM(mem_registers_base), mem_registers_base, 0x2000, 1 << ARC_PAGER_4K | 1 << ARC_PAGER_NX | 1 << ARC_PAGER_RW | ARC_PAGER_PAT_UC) != 0) {
+	if (pager_map(NULL, ARC_PHYS_TO_HHDM(mem_registers_base), mem_registers_base, 0x2000, 1 << ARC_PAGER_4K | 1 << ARC_PAGER_NX | 1 << ARC_PAGER_RW | ARC_PAGER_PAT_UC) != 0) {
 		ARC_DEBUG(ERR, "Failed to map register space\n");
 		return -1;
 	}
