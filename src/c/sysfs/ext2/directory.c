@@ -148,8 +148,8 @@ static void *locate_ext2_directory(struct ARC_Resource *res, char *filename) {
 ARC_REGISTER_DRIVER(0, ext2, directory) = {
         .init = init_ext2_directory,
 	.uninit = uninit_ext2_directory,
-	.write = dridefs_size_t_func_empty,
-	.read = dridefs_size_t_func_empty,
+	.write = write_ext2_directory,
+	.read = read_ext2_directory,
 	.seek = dridefs_int_func_empty,
 	.rename = dridefs_int_func_empty,
 	.stat = stat_ext2_directory,

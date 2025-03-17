@@ -264,7 +264,7 @@ static void *locate_ext2_super(struct ARC_Resource *res, char *filename) {
 
 static uint64_t *ext2_allocate_blocks(struct ext2_super_driver_state *state, uint32_t inode, uint32_t count) {
 	if (state == NULL || inode == 0 || count == 0) {
-		ARC_DEBUG(ERR, "Improper parameters (%p %lu %lu)\n", state, inode, count);
+		ARC_DEBUG(ERR, "Improper parameters (%p %u %u)\n", state, inode, count);
 		return NULL;
 	}
 
@@ -310,7 +310,7 @@ static uint64_t *ext2_allocate_blocks(struct ext2_super_driver_state *state, uin
 		uint64_t range_start_block = (base_block + ((offset << 3)));
 
 		if (block_bmp[offset] == 0) {
-			int max = min(count, 64);
+			uint32_t max = min(count, (uint32_t)64);
 			block_bmp[offset] = ~block_bmp[offset];
 			block_bmp[offset] >>= max;
 			block_bmp[offset] <<= max;
@@ -331,7 +331,7 @@ static uint64_t *ext2_allocate_blocks(struct ext2_super_driver_state *state, uin
 
 static int ext2_delete_inode(struct ext2_super_driver_state *state, uint32_t inode) {
 	if (state == NULL || inode == 0) {
-		ARC_DEBUG(ERR, "Improper parameters (%p %lu)\n", state, inode);
+		ARC_DEBUG(ERR, "Improper parameters (%p %u)\n", state, inode);
 	}
 
 	ARC_DEBUG(ERR, "Unimplemented\n");
@@ -362,8 +362,8 @@ static void *control_ext2_super(struct ARC_Resource *res, void *command, size_t 
 
 	struct ext2_super_driver_state *state = res->driver_state;
 
-	uint8_t cmd_set = *(uint8_t *)&command[len - 1];
-	uint8_t cmd_attrs = *(uint8_t *)&command[len - 2];
+	uint8_t cmd_set = *(uint8_t *)(command + len - 1);
+	uint8_t cmd_attrs = *(uint8_t *)(command + len - 2);
 
 	switch (cmd_set) {
 		case 0x0: {
@@ -372,7 +372,7 @@ static void *control_ext2_super(struct ARC_Resource *res, void *command, size_t 
 			//           0   | 1:Allocate block for given inode 0: Delete given inode
 			//           7:1 | [0]=1: Number of blocks to allocate - 1, [0]=0: Reserved
 			// INODE CMD_ATTRS CMD_SET
-			uint32_t inode = *(uint32_t *)&command[0];
+			uint32_t inode = *(uint32_t *)command;
 			int count = (cmd_attrs >> 1) + 1;
 
 			if (MASKED_READ(cmd_attrs, 0, 1) == 0) {
@@ -396,7 +396,7 @@ static void *control_ext2_super(struct ARC_Resource *res, void *command, size_t 
 				log2_size--;
 			}
 
-			uint8_t opcode = *(uint8_t *)&command[len - opcode_size - 3];
+			uint8_t opcode = *(uint8_t *)(command + len - opcode_size - 3);
 
 			switch (opcode) {
 				case CNTRL_OPCODE_ASSOCIATE: {
@@ -418,6 +418,8 @@ static void *control_ext2_super(struct ARC_Resource *res, void *command, size_t 
 			//            DATA: NEW_PROPERTIES
 		}
 	}
+
+	return NULL;
 }
 
 struct ext2_inode *ext2_read_inode(struct ext2_super_driver_state *state, uint64_t inode) {
@@ -447,8 +449,8 @@ struct ext2_inode *ext2_read_inode(struct ext2_super_driver_state *state, uint64
 ARC_REGISTER_DRIVER(0, ext2, super) = {
         .init = init_ext2_super,
 	.uninit = uninit_ext2_super,
-	.write = dridefs_size_t_func_empty,
-	.read = dridefs_size_t_func_empty,
+	.write = write_ext2_super,
+	.read = read_ext2_super,
 	.seek = dridefs_int_func_empty,
 	.rename = dridefs_int_func_empty,
 	.stat = stat_ext2_super,

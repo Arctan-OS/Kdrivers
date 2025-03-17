@@ -72,7 +72,7 @@ static size_t ext2_traverse_blocks(struct ext2_basic_driver_state *state, uint64
 				   size_t (*do_callback)(struct ext2_basic_driver_state *, uint32_t block, uint64_t traversed, uint64_t jank, void *), void *do_arg,
 				   uint32_t (*create_callback)(void *, uint32_t inode), void *create_arg) {
 	if (state == NULL || size == 0) {
-		ARC_DEBUG(ERR, "Failed to traverse blocks improper parameters (%p %d)\n", state, size);
+		ARC_DEBUG(ERR, "Failed to traverse blocks improper parameters (%p %lu)\n", state, size);
 		return 0;
 	}
 
@@ -257,7 +257,7 @@ static size_t ext2_write_callback(struct ext2_basic_driver_state *state, uint32_
 
 static uint32_t ext2_create_callback(void *args, uint32_t inode) {
 	if (args == NULL || inode == 0) {
-		ARC_DEBUG(ERR, "Create callback failed, improper parameters (%p %lu)", args, inode);
+		ARC_DEBUG(ERR, "Create callback failed, improper parameters (%p %u)", args, inode);
 		return 0;
 	}
 
