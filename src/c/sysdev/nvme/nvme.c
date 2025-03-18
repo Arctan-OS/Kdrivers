@@ -147,7 +147,7 @@ uint64_t nvme_set_command_set(struct controller_state *state) {
 
 	if (MASKED_READ(cap, 43, 1) == 1) {
 		// CAP.CSS.IOCSS not set
-		uint64_t *iocs_struct = (uint64_t *)pmm_alloc();
+		uint64_t *iocs_struct = (uint64_t *)pmm_alloc_page();
 
 		struct qs_entry iocs_struct_cmd = {
 	                .cdw0.opcode = 0x6,
@@ -168,7 +168,7 @@ uint64_t nvme_set_command_set(struct controller_state *state) {
 			}
 		}
 
-		pmm_free(iocs_struct);
+		pmm_free_page(iocs_struct);
 
 		struct qs_entry set_cmd = {
 		        .cdw0.opcode = 0x9,
@@ -197,7 +197,7 @@ int nvme_enumerate_enabled_command_sets(struct controller_state *state, uint64_t
 	while (command_sets != 0) {
 		int idx = __builtin_ffs(command_sets) - 1;
 
-		uint64_t *namespaces = (uint64_t *)pmm_alloc();
+		uint64_t *namespaces = (uint64_t *)pmm_alloc_page();
 		memset(namespaces, 0, PAGE_SIZE);
 
 		struct qs_entry get_ns_cmd = {
@@ -230,7 +230,7 @@ int nvme_enumerate_enabled_command_sets(struct controller_state *state, uint64_t
 			init_resource(ARC_DRIDEF_NVME_NAMESPACE, &args);
 		}
 
-		pmm_free(namespaces);
+		pmm_free_page(namespaces);
 
 		command_sets &= ~(1 << (idx));
 	}
@@ -242,7 +242,7 @@ int nvme_identify_controller(struct controller_state *state) {
 		return -1;
 	}
 
-	uint8_t *data = (uint8_t *)pmm_alloc();
+	uint8_t *data = (uint8_t *)pmm_alloc_page();
 
 	struct qs_entry cmd = {
 	        .cdw0.opcode = 0x6,
@@ -278,7 +278,7 @@ int nvme_identify_controller(struct controller_state *state) {
 	nvme_submit_command(state, ADMIN_QUEUE, &cmd);
 	nvme_poll_completion(state, &cmd, NULL);
 
-	pmm_free(data);
+	pmm_free_page(data);
 
 	return 0;
 }

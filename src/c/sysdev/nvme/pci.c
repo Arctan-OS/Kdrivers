@@ -24,6 +24,7 @@
  *
  * @DESCRIPTION
 */
+#include "global.h"
 #include <drivers/sysdev/nvme/pci.h>
 #include <drivers/sysdev/nvme/nvme.h>
 #include <arch/pager.h>
@@ -130,7 +131,7 @@ static int reset_controller(struct controller_state *state) {
 	while (MASKED_READ(properties->csts, 0, 1));
 
 	// Create adminstrator queue
-	void *queues = pmm_contig_alloc(2);
+	void *queues = pmm_alloc(PAGE_SIZE * 2);
 
 	if (queues == NULL) {
 		ARC_DEBUG(ERR, "Failed to allocate adminstrator queues\n");
