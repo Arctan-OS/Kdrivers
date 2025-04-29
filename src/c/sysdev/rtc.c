@@ -1,5 +1,5 @@
 /**
- * @file uart.c
+ * @file rtc.c
  *
  * @author awewsomegamer <awewsomegamer@gmail.com>
  *
@@ -28,29 +28,21 @@
 #include <global.h>
 #include <drivers/dri_defs.h>
 
-struct driver_state {
-	uint8_t *rx_buf;
-	uint8_t *tx_buf;
-	size_t rx_len;
-	size_t tx_len;
-	int data_len;
-};
-
-static int init_uart(struct ARC_Resource *res, void *args) {
+static int init_rtc(struct ARC_Resource *res, void *args) {
 	if (res == NULL || args == NULL) {
 		return -1;
 	}
 
-	printf("Hello World\n");
+	printf("Hello World 2\n");
 
 	return 0;
 }
 
-static int uninit_uart() {
+static int uninit_rtc() {
 	return 0;
 }
 
-static size_t read_uart(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
+static size_t read_rtc(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
 	if (buffer == NULL || size == 0 || count == 0 || file == NULL || res == NULL) {
 		return 0;
  	}
@@ -58,7 +50,7 @@ static size_t read_uart(void *buffer, size_t size, size_t count, struct ARC_File
         return 0;
 }
 
-static size_t write_uart(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
+static size_t write_rtc(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res) {
 	if (buffer == NULL || size == 0 || count == 0 || file == NULL || res == NULL) {
 		return 0;
         }
@@ -67,15 +59,15 @@ static size_t write_uart(void *buffer, size_t size, size_t count, struct ARC_Fil
 }
 
 static uint64_t acpi_codes[] = {
-	0x9D2E741F3E2DEEC7, 
+	0x95368E5074F817D9,
 	ARC_DRIDEF_ACPI_TERMINATOR
 };
 
-ARC_REGISTER_DRIVER(3, uart,) = {
-        .init = init_uart,
-	.uninit = uninit_uart,
-        .read = read_uart,
-        .write = write_uart,
+ARC_REGISTER_DRIVER(3, rtc,) = {
+        .init = init_rtc,
+	.uninit = uninit_rtc,
+        .read = read_rtc,
+        .write = write_rtc,
 	.seek = dridefs_int_func_empty,
 	.rename = dridefs_int_func_empty,
 	.acpi_codes = acpi_codes

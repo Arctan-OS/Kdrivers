@@ -105,12 +105,13 @@ def construct_dri_defs(definitions, out_header_file, out_source_file):
       out_header.write(name)
       if (definitions[definition]["group"] != -1):
         # Global
-        name = "extern struct ARC_DriverDef __driver_{0}_{1};\n".format(definition, sub)
+        name = "extern struct ARC_DriverDef _driver_{0}_{1};\n".format(definition, sub)
         out_header.write(name)
 
-  out_header.write("#define ARC_DRIDEF_PCI_TERMINATOR 0xFFFFFFFF\n")
+  out_header.write("#define ARC_DRIDEF_PCI_TERMINATOR ((uint32_t)-1)\n")
+  out_header.write("#define ARC_DRIDEF_ACPI_TERMINATOR ((uint64_t)-1)\n")
 
-  out_header.write("extern struct ARC_DriverDef *__DRIVER_LOOKUP_TABLE[];\n")
+  out_header.write("extern struct ARC_DriverDef *_DRIVER_LOOKUP_TABLE[];\n")
 
   out_header.write("int dridefs_int_func_empty();\n")
   out_header.write("size_t dridefs_size_t_func_empty();\n")
@@ -127,12 +128,12 @@ def construct_dri_defs(definitions, out_header_file, out_source_file):
   out_source.write("*/\n")
 
   out_source.write("#include <drivers/dri_defs.h>\n");
-  out_source.write("struct ARC_DriverDef *__DRIVER_LOOKUP_TABLE[] = {\n")
+  out_source.write("struct ARC_DriverDef *_DRIVER_LOOKUP_TABLE[] = {\n")
   for definition in definitions:
     for sub in definitions[definition]:
       if (sub == "group" or definitions[definition]["group"] == -1):
         continue
-      name = "\t[{0}] = &__driver_{1}_{2},\n".format(definitions[definition][sub], definition, sub)
+      name = "\t[{0}] = &_driver_{1}_{2},\n".format(definitions[definition][sub], definition, sub)
       out_source.write(name)
   out_source.write("};\n")
 
