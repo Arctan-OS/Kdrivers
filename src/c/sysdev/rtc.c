@@ -27,13 +27,22 @@
 #include <lib/resource.h>
 #include <global.h>
 #include <drivers/dri_defs.h>
+#include <lib/perms.h>
+#include <fs/vfs.h>
 
 static int init_rtc(struct ARC_Resource *res, void *args) {
 	if (res == NULL || args == NULL) {
 		return -1;
 	}
 
-	printf("Hello World 2\n");
+	char *path = "/dev/rtc0";
+
+	struct ARC_VFSNodeInfo info = {
+	        .type = ARC_VFS_N_DEV,
+		.mode = ARC_STD_PERM,
+		.resource_overwrite = res,
+        };
+	vfs_create(path, &info);
 
 	return 0;
 }
@@ -58,6 +67,16 @@ static size_t write_rtc(void *buffer, size_t size, size_t count, struct ARC_File
         return 0;
 }
 
+static int stat_rtc(struct ARC_Resource *res, char *filename, struct stat *stat) {
+	(void)filename;
+
+	if (res == NULL || stat == NULL) {
+		return -1;
+	}
+
+	return 0;
+}
+
 static uint64_t acpi_codes[] = {
 	0x95368E5074F817D9,
 	ARC_DRIDEF_ACPI_TERMINATOR
@@ -70,6 +89,7 @@ ARC_REGISTER_DRIVER(3, rtc,) = {
         .write = write_rtc,
 	.seek = dridefs_int_func_empty,
 	.rename = dridefs_int_func_empty,
+	.stat = stat_rtc,
 	.acpi_codes = acpi_codes
 };
 
