@@ -32,7 +32,7 @@
 #include <lib/perms.h>
 #include <drivers/dri_defs.h>
 #include <abi-bits/seek-whence.h>
-
+#include <fs/vfs.h>
 #define NAME_FORMAT "%sp%d"
 
 struct driver_state {

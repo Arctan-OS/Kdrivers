@@ -33,6 +33,7 @@
 #include <sys/stat.h>
 #include <drivers/dri_defs.h>
 #include <abi-bits/seek-whence.h>
+#include <fs/vfs.h>
 
 #define ARC_NAME_OFFSET (sizeof(struct ARC_HeaderCPIO))
 #define ARC_NAME_SIZE(header) (header->namesize + (header->namesize & 1))

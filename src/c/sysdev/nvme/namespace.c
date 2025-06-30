@@ -35,6 +35,7 @@
 #include <lib/perms.h>
 #include <drivers/dri_defs.h>
 #include <lib/partscan/partscan.h>
+#include <fs/vfs.h>
 
 #define NAME_FORMAT "/dev/nvme%dn%d"
 

@@ -33,6 +33,7 @@
 #include <drivers/dri_defs.h>
 #include <mm/pmm.h>
 #include <lib/perms.h>
+#include <fs/vfs.h>
 
 #define NAME_FORMAT "/dev/nvme%d"
 

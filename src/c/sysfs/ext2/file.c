@@ -33,6 +33,7 @@
 #include <mm/allocator.h>
 #include <lib/perms.h>
 #include <lib/util.h>
+#include <fs/vfs.h>
 
 static int init_ext2_file(struct ARC_Resource *res, void *args) {
 	if (res == NULL || args == NULL) {
