@@ -71,7 +71,7 @@ int init_nvme_namespace(struct ARC_Resource *res, void *args) {
 	state->res = res;
 	res->driver_state = state;
 
-	uint8_t *data = (uint8_t *)pmm_alloc_page();
+	uint8_t *data = (uint8_t *)pmm_fast_page_alloc();
 	// NOTE: Assuming NVM Command Set
 	struct qs_entry cmd = {
 	        .cdw0.opcode = 0x6,
@@ -104,7 +104,6 @@ int init_nvme_namespace(struct ARC_Resource *res, void *args) {
 	state->nsze = *(uint64_t *)data;
 	state->ncap = *(uint64_t *)&data[8];
 
-	// TODO: The following three commands aren't yet used
 	cmd.cdw10 = 0x5;
 	nvme_submit_command(state->state, ADMIN_QUEUE, &cmd);
 	nvme_poll_completion(state->state, &cmd, NULL);
@@ -162,8 +161,8 @@ static size_t read_nvme_namespace(void *buffer, size_t size, size_t count, struc
 	// TODO: Extend the size of this data buffer, possibly change
 	//       it such that there is a cache allocated in the initialization
 	//       so that a buffer does not have to be allocated on the fly
-	uint8_t *data = pmm_alloc_page();
-	void *meta = pmm_alloc_page();
+	uint8_t *data = pmm_fast_page_alloc();
+	void *meta = pmm_fast_page_alloc();
 	size_t read = 0;
 
 	while (read < size * count) {
@@ -188,8 +187,8 @@ static size_t read_nvme_namespace(void *buffer, size_t size, size_t count, struc
 		read += copy_size;
 	}
 
-	pmm_free_page(meta);
-	pmm_free_page(data);
+	pmm_fast_page_free(meta);
+	pmm_fast_page_free(data);
 
 	return (size * count);
 }
@@ -204,8 +203,8 @@ static size_t write_nvme_namespace(void *buffer, size_t size, size_t count, stru
 	// TODO: Extend the size of this data buffer, possibly change
 	//       it such that there is a cache allocated in the initialization
 	//       so that a buffer does not have to be allocated on the fly
-	uint8_t *data = pmm_alloc_page();
-	void *meta = pmm_alloc_page();
+	uint8_t *data = pmm_fast_page_alloc();
+	void *meta = pmm_fast_page_alloc();
 	size_t written = 0;
 
 	while (written < size * count) {
@@ -244,8 +243,8 @@ static size_t write_nvme_namespace(void *buffer, size_t size, size_t count, stru
 		written += copy_size;
 	}
 
-	pmm_free_page(meta);
-	pmm_free_page(data);
+	pmm_fast_page_free(meta);
+	pmm_fast_page_free(data);
 
 	return (size * count);
 }
