@@ -25,15 +25,12 @@
  * @DESCRIPTION
  * CPIO superblock driver for the initramfs image.
 */
-#include <lib/atomics.h>
-#include <lib/perms.h>
-#include <fs/vfs.h>
-#include <mm/allocator.h>
-#include <global.h>
-#include <time.h>
-#include <lib/util.h>
-#include <sys/stat.h>
-#include <drivers/dri_defs.h>
+#include "drivers/dri_defs.h"
+#include "drivers/resource.h"
+#include "global.h"
+#include "lib/util.h"
+#include "mm/allocator.h"
+#include "sys/stat.h"
 
 #define ARC_NAME_OFFSET (sizeof(struct ARC_HeaderCPIO))
 #define ARC_NAME_SIZE(header) (header->namesize + (header->namesize & 1))

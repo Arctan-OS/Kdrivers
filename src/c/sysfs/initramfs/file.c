@@ -25,15 +25,14 @@
  * @DESCRIPTION
  * CPIO file driver for the initramfs image.
 */
-#include <abi-bits/errno.h>
-#include <lib/atomics.h>
-#include <mm/allocator.h>
-#include <global.h>
-#include <lib/util.h>
-#include <sys/stat.h>
-#include <drivers/dri_defs.h>
-#include <abi-bits/seek-whence.h>
-#include <fs/vfs.h>
+#include "abi-bits/errno.h"
+#include "drivers/dri_defs.h"
+#include "drivers/resource.h"
+#include "fs/vfs.h"
+#include "global.h"
+#include "lib/util.h"
+#include "mm/allocator.h"
+#include "sys/stat.h"
 
 #define ARC_NAME_OFFSET (sizeof(struct ARC_HeaderCPIO))
 #define ARC_NAME_SIZE(header) (header->namesize + (header->namesize & 1))

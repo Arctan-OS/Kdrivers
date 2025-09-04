@@ -26,15 +26,12 @@
 */
 #include "arch/acpi/acpi.h"
 #include "arch/io/port.h"
-#include "interface/printf.h"
-#include <lib/resource.h>
-#include <global.h>
-#include <drivers/dri_defs.h>
-#include <lib/perms.h>
-#include <fs/vfs.h>
-#include <mm/allocator.h>
-#include <lib/util.h>
-#include <stdint.h>
+#include "drivers/dri_defs.h"
+#include "drivers/resource.h"
+#include "fs/vfs.h"
+#include "global.h"
+#include "lib/util.h"
+#include "mm/allocator.h"
 
 #define NAME_FORMAT "/dev/uart%d"
 

@@ -27,9 +27,10 @@
 #ifndef ARC_DRIVERS_SYSFS_EXT2_SUPER_H
 #define ARC_DRIVERS_SYSFS_EXT2_SUPER_H
 
+#include "drivers/sysfs/ext2/state_defs.h"
+
 #include <stdint.h>
 #include <global.h>
-#include <drivers/sysfs/ext2/state_defs.h>
 
 struct ext2_locate_args {
 	struct ext2_inode *node;

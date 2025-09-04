@@ -27,9 +27,10 @@
 #ifndef ARC_DRIVERS_SYSFS_EXT2_STATE_DEFS_H
 #define ARC_DRIVERS_SYSFS_EXT2_STATE_DEFS_H
 
+#include "drivers/sysfs/ext2/ext2.h"
+
 #include <stdint.h>
 #include <global.h>
-#include <drivers/sysfs/ext2/ext2.h>
 
 struct ext2_basic_driver_state {
 	struct ARC_File *partition;

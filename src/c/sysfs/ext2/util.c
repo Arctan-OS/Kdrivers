@@ -24,10 +24,12 @@
  *
  * @DESCRIPTION
 */
-#include <drivers/sysfs/ext2/util.h>
-#include <mm/allocator.h>
-#include <lib/util.h>
-#include <fs/vfs.h>
+#include "abi-bits/seek-whence.h"
+#include "drivers/sysfs/ext2/util.h"
+#include "fs/vfs.h"
+#include "lib/util.h"
+#include "mm/allocator.h"
+
 
 // TODO: For the below three functions revise naming
 static uint32_t ext2_load_block(uint32_t *block,

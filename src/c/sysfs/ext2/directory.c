@@ -24,13 +24,13 @@
  *
  * @DESCRIPTION
 */
-#include <drivers/dri_defs.h>
-#include <lib/resource.h>
-#include <drivers/sysfs/ext2/super.h>
-#include <drivers/sysfs/ext2/util.h>
-#include <mm/allocator.h>
-#include <lib/perms.h>
-#include <fs/vfs.h>
+#include "abi-bits/seek-whence.h"
+#include "drivers/dri_defs.h"
+#include "drivers/resource.h"
+#include "drivers/sysfs/ext2/super.h"
+#include "drivers/sysfs/ext2/util.h"
+#include "fs/vfs.h"
+#include "mm/allocator.h"
 
 static int init_ext2_directory(struct ARC_Resource *res, void *args) {
 	if (res == NULL || args == NULL) {

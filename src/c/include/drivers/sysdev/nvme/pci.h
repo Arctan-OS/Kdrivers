@@ -27,12 +27,11 @@
 #ifndef ARC_DRIVERS_DEV_SYSNVME_PCI_H
 #define ARC_DRIVERS_DEV_SYSNVME_PCI_H
 
-#include <arch/pci/pci.h>
-#include <drivers/sysdev/nvme/nvme.h>
+#include "arch/pci.h"
+#include "drivers/sysdev/nvme/nvme.h"
 
 int nvme_pci_submit_command(struct controller_state *state, int queue, struct qs_entry *cmd);
 int nvme_pci_poll_completion(struct controller_state *state, struct qs_entry *cmd, struct qc_entry *ret);
-
 int init_nvme_pci(struct controller_state *state, struct ARC_PCIHeader *header);
 
 #endif

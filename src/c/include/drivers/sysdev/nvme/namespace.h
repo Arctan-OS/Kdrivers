@@ -27,8 +27,9 @@
 #ifndef ARC_DRIVERS_SYSDEV_NVME_NAMESPACE_H
 #define ARC_DRIVERS_SYSDEV_NVME_NAMESPACE_H
 
+#include "drivers/sysdev/nvme/nvme.h"
+
 #include <stdint.h>
-#include <drivers/sysdev/nvme/nvme.h>
 
 struct nvme_namespace_dri_args {
 	struct controller_state *state;

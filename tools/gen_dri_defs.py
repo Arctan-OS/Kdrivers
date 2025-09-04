@@ -91,7 +91,7 @@ def construct_dri_defs(definitions, out_header_file, out_source_file):
   out_header.write("#ifndef AUTOGEN_ARC_DRIVERS_DRI_DEFS\n")
   out_header.write("#define AUTOGEN_ARC_DRIVERS_DRI_DEFS\n")
 
-  out_header.write("#include <lib/resource.h>\n\n")
+  out_header.write("\n#include \"drivers/resource.h\"\n\n")
 
   # Variables and definitions
   for definition in definitions:

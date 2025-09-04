@@ -24,13 +24,14 @@
  *
  * @DESCRIPTION
 */
+#include "arch/pager.h"
+#include "drivers/dri_defs.h"
+#include "drivers/sysdev/nvme/nvme.h"
+#include "drivers/sysdev/nvme/pci.h"
 #include "global.h"
-#include <drivers/sysdev/nvme/pci.h>
-#include <drivers/sysdev/nvme/nvme.h>
-#include <arch/pager.h>
-#include <mm/pmm.h>
-#include <lib/util.h>
-#include <drivers/dri_defs.h>
+#include "lib/mutex.h"
+#include "lib/util.h"
+#include "mm/pmm.h"
 
 int nvme_pci_submit_command(struct controller_state *state, int queue, struct qs_entry *cmd) {
 	if (state == NULL || cmd == NULL) {
@@ -235,7 +236,8 @@ int init_nvme_pci(struct controller_state *state, struct ARC_PCIHeader *header) 
 
 	state->properties = properties;
 
-	reset_controller(state);
+	// XXX: There is a triple fault occurring in this function
+	// reset_controller(state);
 
 	return 0;
 }

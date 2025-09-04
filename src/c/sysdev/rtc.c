@@ -24,11 +24,10 @@
  *
  * @DESCRIPTION
 */
-#include <lib/resource.h>
-#include <global.h>
-#include <drivers/dri_defs.h>
-#include <lib/perms.h>
-#include <fs/vfs.h>
+#include "drivers/dri_defs.h"
+#include "drivers/resource.h"
+#include "fs/vfs.h"
+#include "global.h"
 
 static int init_rtc(struct ARC_Resource *res, void *args) {
 	if (res == NULL || args == NULL) {

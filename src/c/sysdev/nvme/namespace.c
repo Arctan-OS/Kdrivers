@@ -25,17 +25,15 @@
  * @DESCRIPTION
  * Driver implementing functions to manage I/O namespaces in an NVM subsystem.
 */
-#include <lib/resource.h>
-#include <drivers/sysdev/nvme/namespace.h>
-#include <drivers/sysdev/nvme/nvme.h>
-#include <mm/pmm.h>
-#include <global.h>
-#include <mm/allocator.h>
-#include <lib/util.h>
-#include <lib/perms.h>
-#include <drivers/dri_defs.h>
-#include <lib/partscan/partscan.h>
-#include <fs/vfs.h>
+#include "drivers/dri_defs.h"
+#include "drivers/resource.h"
+#include "drivers/sysdev/nvme/namespace.h"
+#include "drivers/sysdev/nvme/nvme.h"
+#include "fs/vfs.h"
+#include "lib/partscan/partscan.h"
+#include "lib/util.h"
+#include "mm/allocator.h"
+#include "mm/pmm.h"
 
 #define NAME_FORMAT "/dev/nvme%dn%d"
 

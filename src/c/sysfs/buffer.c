@@ -25,13 +25,12 @@
  * @DESCRIPTION
  * Driver for RAM files or buffers which are accesible by the VFS.
 */
-#include <lib/resource.h>
-#include <global.h>
-#include <mm/allocator.h>
-#include <lib/util.h>
-#include <drivers/dri_defs.h>
-#include <abi-bits/seek-whence.h>
-#include <arctan.h>
+#include "abi-bits/seek-whence.h"
+#include "drivers/dri_defs.h"
+#include "drivers/resource.h"
+#include "global.h"
+#include "lib/util.h"
+#include "mm/allocator.h"
 
 // NOTE: Should buffers be made such that they are dynamic in size? So one can just append data?
 

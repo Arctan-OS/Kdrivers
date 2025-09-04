@@ -24,16 +24,16 @@
  *
  * @DESCRIPTION
 */
-#include <drivers/sysdev/nvme/nvme.h>
-#include <drivers/sysdev/nvme/namespace.h>
-#include <drivers/sysdev/nvme/pci.h>
-#include <mm/allocator.h>
-#include <lib/ringbuffer.h>
-#include <lib/util.h>
-#include <drivers/dri_defs.h>
-#include <mm/pmm.h>
-#include <lib/perms.h>
-#include <fs/vfs.h>
+#include "drivers/dri_defs.h"
+#include "drivers/sysdev/nvme/pci.h"
+#include "drivers/sysdev/nvme/namespace.h"
+#include "drivers/sysdev/nvme/nvme.h"
+#include "fs/vfs.h"
+#include "lib/mutex.h"
+#include "lib/ringbuffer.h"
+#include "lib/util.h"
+#include "mm/allocator.h"
+#include "mm/pmm.h"
 
 #define NAME_FORMAT "/dev/nvme%d"
 
@@ -306,6 +306,8 @@ int nvme_setup_io_queues(struct controller_state *state) {
 }
 
 int init_nvme(struct ARC_Resource *res, void *arg) {
+	return -1;
+
 	if (res == NULL || arg == NULL) {
 		return -1;
 	}
@@ -334,6 +336,8 @@ int init_nvme(struct ARC_Resource *res, void *arg) {
 
 	cntrl->max_ioqpair_count = 2;
 
+	// XXX: This function calls to reset the controller that reults in a triple fault,
+	//      added a return -1; to error out to resource handler
 	init_nvme_pci(cntrl, arg);
 	nvme_identify_controller(cntrl);
 	nvme_setup_io_queues(cntrl);

@@ -27,7 +27,7 @@
 #ifndef ARC_DRIVERS_SYSFS_EXT2_UTIL_H
 #define ARC_DRIVERS_SYSFS_EXT2_UTIL_H
 
-#include <drivers/sysfs/ext2/state_defs.h>
+#include "drivers/sysfs/ext2/state_defs.h"
 
 size_t ext2_read_inode_data(struct ext2_basic_driver_state *state, uint8_t *buffer, uint64_t offset, size_t size);
 size_t ext2_write_inode_data(struct ext2_node_driver_state *state, uint8_t *buffer, uint64_t offset, size_t size); 

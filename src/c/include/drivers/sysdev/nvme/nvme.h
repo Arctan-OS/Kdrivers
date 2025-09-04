@@ -27,10 +27,12 @@
 #ifndef ARC_DRIVERS_SYSDEV_NVME_NVME_H
 #define ARC_DRIVERS_SYSDEV_NVME_NVME_H
 
+#include "global.h"
+#include "lib/mutex.h"
+#include "lib/ringbuffer.h"
+
 #include <stdint.h>
 #include <stddef.h>
-#include <global.h>
-#include <lib/ringbuffer.h>
 
 #define SQnTDBL(__properties, __n) ((uintptr_t)__properties->data + ((2 * (__n)) * (4 << MASKED_READ(__properties->cap, 32, 0b1111))))
 #define CQnHDBL(__properties, __n) ((uintptr_t)__properties->data + ((2 * (__n) + 1) * (4 << MASKED_READ(__properties->cap, 32, 0b1111))))
@@ -123,7 +125,7 @@ struct controller_state {
 	uint64_t id_bmp;
 	size_t max_ioqpair_count;
 	size_t max_transfer_size;
-	ARC_GenericMutex qpair_lock;
+	ARC_Mutex qpair_lock;
 	uint32_t ctratt;
 	uint32_t controller_version;
 	uint32_t domain;

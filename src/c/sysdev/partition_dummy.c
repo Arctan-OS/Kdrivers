@@ -24,15 +24,15 @@
  *
  * @DESCRIPTION
 */
-#include <drivers/sysdev/partition_dummy.h>
-#include <lib/resource.h>
-#include <global.h>
-#include <mm/allocator.h>
-#include <lib/util.h>
-#include <lib/perms.h>
-#include <drivers/dri_defs.h>
-#include <abi-bits/seek-whence.h>
-#include <fs/vfs.h>
+#include "abi-bits/seek-whence.h"
+#include "drivers/dri_defs.h"
+#include "drivers/resource.h"
+#include "drivers/sysdev/partition_dummy.h"
+#include "fs/vfs.h"
+#include "global.h"
+#include "lib/util.h"
+#include "mm/allocator.h"
+
 #define NAME_FORMAT "%sp%d"
 
 struct driver_state {
