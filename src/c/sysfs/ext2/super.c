@@ -306,7 +306,7 @@ static uint64_t *ext2_allocate_blocks(struct ext2_super_driver_state *state, uin
 
 	int next_ret_idx = 0;
 	uint64_t offset;
-	uint64_t base_block = ALIGN(state->descriptor_table[use_group].inode_table_start + (((state->basic.block_size * 8) * state->super.inode_size)), state->basic.block_size) / state->basic.block_size;
+	uint64_t base_block = ALIGN_UP(state->descriptor_table[use_group].inode_table_start + (((state->basic.block_size * 8) * state->super.inode_size)), state->basic.block_size) / state->basic.block_size;
 	for (offset = 0; offset < state->basic.block_size / 8; offset++) {
 		uint64_t range_start_block = (base_block + ((offset << 3)));
 
