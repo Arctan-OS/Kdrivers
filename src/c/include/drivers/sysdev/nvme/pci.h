@@ -32,6 +32,6 @@
 
 int nvme_pci_submit_command(struct controller_state *state, int queue, struct qs_entry *cmd);
 int nvme_pci_poll_completion(struct controller_state *state, struct qs_entry *cmd, struct qc_entry *ret);
-int init_nvme_pci(struct controller_state *state, struct ARC_PCIHeader *header);
+int init_nvme_pci(struct controller_state *state, struct ARC_PCIHeaderMeta *meta);
 
 #endif

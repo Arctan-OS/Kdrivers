@@ -25,6 +25,7 @@
  * @DESCRIPTION
 */
 #include "arch/pager.h"
+#include "arch/pci.h"
 #include "drivers/dri_defs.h"
 #include "drivers/sysdev/nvme/nvme.h"
 #include "drivers/sysdev/nvme/pci.h"
@@ -193,8 +194,8 @@ static int reset_controller(struct controller_state *state) {
 	return 0;
 }
 
-int init_nvme_pci(struct controller_state *state, struct ARC_PCIHeader *header) {
-	if (state == NULL || header == NULL) {
+int init_nvme_pci(struct controller_state *state, struct ARC_PCIHeaderMeta *meta) {
+	if (state == NULL || meta == NULL) {
 		return -1;
 	}
 
@@ -202,15 +203,15 @@ int init_nvme_pci(struct controller_state *state, struct ARC_PCIHeader *header) 
 	uint64_t idx_data_pair_base = 0;
 	(void)idx_data_pair_base;
 
-	switch (header->common.header_type) {
-		case 0: {
-			struct ARC_PCIHdr0 header0 = header->headers.header0;
+	switch (meta->header->common.header_type) {
+		case ARC_PCI_HEADER_DEVICE: {
+			struct ARC_PCIHdrDevice header = meta->header->s.device;
 
-			mem_registers_base = header0.bar0 & ~0x3FFF;
-			mem_registers_base |= (uint64_t)header0.bar1 << 32;
+			mem_registers_base = header.bar0 & ~0x3FFF;
+			mem_registers_base |= (uint64_t)header.bar1 << 32;
 
-			if (ARC_BAR_IS_IOSPACE(header0.bar2)) {
-				idx_data_pair_base = header0.bar2 & ~0b111;
+			if (ARC_BAR_IS_IOSPACE(header.bar2)) {
+				idx_data_pair_base = header.bar2 & ~0b111;
 			}
 
 			break;
