@@ -117,11 +117,14 @@ static uint64_t get_dri_def_pci(uint16_t vendor, uint16_t device) {
 	return (uint64_t)-1;
 }
 
-struct ARC_Resource *init_pci_resource(uint16_t vendor, uint16_t device, void *args) {
-	if (vendor == 0xFFFF && device == 0xFFFF) {
+struct ARC_Resource *init_pci_resource(uint32_t vendor_device, void *args) {
+	if (vendor_device == 0xFFFFFFFF) {
 		ARC_DEBUG(WARN, "Skipping PCI resource initialization\n");
 		return NULL;
 	}
+
+	uint16_t vendor = vendor_device & 0xFFFF;
+	uint16_t device = (vendor_device >> 16) & 0xFFFF;
 
 	ARC_DEBUG(INFO, "Initializing PCI resource 0x%04x:0x%04x\n", vendor, device);
 

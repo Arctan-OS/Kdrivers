@@ -33,9 +33,9 @@
 #include <stdint.h>
 
 #define ARC_REGISTER_DRIVER(group, name, ext) \
-	struct ARC_DriverDef _driver_##name##_##ext
+	ARC_DriverDef _driver_##name##_##ext
 
-struct ARC_Resource {
+typedef struct ARC_Resource {
 	/// ID
 	uint64_t id;
 	/// Specific driver function set (supplied on init by caller).
@@ -44,9 +44,9 @@ struct ARC_Resource {
 	struct ARC_DriverDef *driver;
 	/// State managed by driver, owned by resource.
 	void *driver_state;
-};
+} ARC_Resource;
 
-struct ARC_File {
+typedef struct ARC_File {
 	/// Current offset into the file.
 	long offset;
 	/// Pointer to the VFS node.
@@ -55,11 +55,11 @@ struct ARC_File {
 	uint32_t ref_count;
 	/// Mode the file was opened with.
 	uint32_t mode;
-};
+} ARC_File;
 
 // NOTE: No function pointer in a driver definition
 //       should be NULL.
-struct ARC_DriverDef {
+typedef struct ARC_DriverDef {
 	int (*init)(struct ARC_Resource *res, void *args);
 	int (*uninit)(struct ARC_Resource *res);
 	size_t (*write)(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res);
@@ -73,11 +73,11 @@ struct ARC_DriverDef {
 	void *(*locate)(struct ARC_Resource *res, char *path);
  	uint32_t *pci_codes; // Terminates with ARC_DRI_PCI_TERMINATOR if non-NULL
 	uint64_t *acpi_codes; // Terminates with ARC_DRI_ACPI_TERMINATOR if non-NULL
-};
+} ARC_DriverDef;
 
-struct ARC_Resource *init_resource(uint64_t dri_index, void *args);
-struct ARC_Resource *init_pci_resource(uint16_t vendor, uint16_t device, void *args);
-struct ARC_Resource *init_acpi_resource(uint64_t hid_hash, void *args);
+ARC_Resource *init_resource(uint64_t dri_index, void *args);
+ARC_Resource *init_pci_resource(uint32_t vendor_device, void *args);
+ARC_Resource *init_acpi_resource(uint64_t hid_hash, void *args);
 int uninit_resource(struct ARC_Resource *resource);
 
 #endif
