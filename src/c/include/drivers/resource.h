@@ -27,6 +27,7 @@
 #ifndef ARC_RESOURCE_H
 #define ARC_RESOURCE_H
 
+#include "arch/pci.h"
 #include "sys/stat.h"
 
 #include <stddef.h>
@@ -76,7 +77,7 @@ typedef struct ARC_DriverDef {
 } ARC_DriverDef;
 
 ARC_Resource *init_resource(uint64_t dri_index, void *args);
-ARC_Resource *init_pci_resource(uint32_t vendor_device, void *args);
+ARC_Resource *init_pci_resource(ARC_PCIHeaderMeta *meta);
 ARC_Resource *init_acpi_resource(uint64_t hid_hash, void *args);
 int uninit_resource(struct ARC_Resource *resource);
 
