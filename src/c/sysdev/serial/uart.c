@@ -262,7 +262,8 @@ static int init_uart(struct ARC_Resource *res, void *args) {
 	char path[64] = { 0 };
 
 	sprintf(path, NAME_FORMAT, instance_counter++);
-	
+
+	/*
 	struct ARC_VFSNodeInfo info = {
 		.type = ARC_VFS_N_DEV,
 		.mode = ARC_STD_PERM,
@@ -270,7 +271,8 @@ static int init_uart(struct ARC_Resource *res, void *args) {
         };
 	
 	vfs_create(path, &info);
-	
+	*/
+
 	set_data_bits(state, 8);
 	set_parity(state, NO_PARITY);
 	set_stop_bits(state, ONE_STOP_BIT);

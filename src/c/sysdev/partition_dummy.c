@@ -71,12 +71,14 @@ static int init_partition_dummy(struct ARC_Resource *res, void *args) {
 	char *path = (char *)alloc(strlen(dri_args->drive_path) + 32);
 	sprintf(path, NAME_FORMAT, dri_args->drive_path, dri_args->partition_number);
 
+	/*
 	struct ARC_VFSNodeInfo info = {
 	        .type = ARC_VFS_N_DEV,
 		.mode = ARC_STD_PERM,
 		.resource_overwrite = res,
         };
 	vfs_create(path, &info);
+	*/
 
 	free(path);
 

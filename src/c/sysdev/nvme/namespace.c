@@ -132,14 +132,14 @@ int init_nvme_namespace(struct ARC_Resource *res, void *args) {
 
 	char path[64] = { 0 };
 	sprintf(path, NAME_FORMAT, dri_args->state->controller_id, dri_args->namespace);
-
+/*
 	struct ARC_VFSNodeInfo info = {
 	        .type = ARC_VFS_N_DEV,
 		.mode = ARC_STD_PERM,
 		.resource_overwrite = res,
         };
 	vfs_create(path, &info);
-
+*/
 	partscan_enumerate_partitions(path);
 
 	return 0;

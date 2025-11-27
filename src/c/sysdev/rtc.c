@@ -36,12 +36,14 @@ static int init_rtc(struct ARC_Resource *res, void *args) {
 
 	char *path = "/dev/rtc0";
 
+        /*
 	struct ARC_VFSNodeInfo info = {
 	        .type = ARC_VFS_N_DEV,
 		.mode = ARC_STD_PERM,
 		.resource_overwrite = res,
         };
 	vfs_create(path, &info);
+        */
 
 	return 0;
 }

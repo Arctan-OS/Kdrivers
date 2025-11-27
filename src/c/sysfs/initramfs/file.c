@@ -55,6 +55,7 @@ struct ARC_HeaderCPIO {
 
 struct internal_driver_state {
 	void *base;
+	size_t size;
 };
 
 static int initramfs_init(struct ARC_Resource *res, void *args) {
@@ -91,12 +92,13 @@ static size_t initramfs_read(void *buffer, size_t size, size_t count, struct ARC
 	struct ARC_HeaderCPIO *header = (struct ARC_HeaderCPIO *)addfiles;
 
 	uint8_t *data = (uint8_t *)(addfiles + ARC_DATA_OFFSET(header));
+	size_t f_size = ARC_DATA_SIZE(header);
 
 	// Copy file data to buffer
 	for (size_t i = 0; i < size * count; i++) {
 		uint8_t value = 0;
 
-		if (i + file->offset < (size_t)file->node->stat.st_size) {
+		if (i + file->offset < f_size) {
 			value = *((uint8_t *)(data + file->offset + i));
 		}
 
