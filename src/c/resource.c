@@ -43,13 +43,13 @@
 
 uint64_t current_id = 0;
 
-struct ARC_Resource *init_resource(uint64_t dri_index, void *args) {
-	if (dri_index >= ARC_DRIDEF_COUNT) {
+ARC_Resource *init_resource(int64_t dri_index, void *args) {
+	if (dri_index >= ARC_DRIDEF_COUNT || dri_index == -1) {
 		ARC_DEBUG(ERR, "Invalid driver index (0x%"PRIx64")\n", dri_index);
 		return NULL;
 	}
 
-	struct ARC_Resource *resource = (struct ARC_Resource *)alloc(sizeof(struct ARC_Resource));
+	ARC_Resource *resource = (struct ARC_Resource *)alloc(sizeof(struct ARC_Resource));
 
 	if (resource == NULL) {
 		ARC_DEBUG(ERR, "Failed to allocate memory for resource\n");
@@ -152,7 +152,7 @@ static uint64_t get_dri_def_acpi(uint64_t hid_hash) {
 	return (uint64_t)-1;
 }
 
-struct ARC_Resource *init_acpi_resource(uint64_t hid_hash, void *args) {
+ARC_Resource *init_acpi_resource(uint64_t hid_hash, void *args) {
 	if (hid_hash == 0) {
 		ARC_DEBUG(WARN, "Skipping ACPI resource initialization\n");
 		return NULL;

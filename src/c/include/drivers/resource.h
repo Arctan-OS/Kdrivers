@@ -28,6 +28,7 @@
 #define ARC_RESOURCE_H
 
 #include "arch/pci.h"
+#include "lib/graph/base.h"
 #include "sys/stat.h"
 
 #include <stddef.h>
@@ -51,32 +52,28 @@ typedef struct ARC_File {
 	/// Current offset into the file.
 	long offset;
 	/// Pointer to the VFS node.
-	struct ARC_VFSNode *node;
-	/// Reference counter for the decsriptor itself.
-	uint32_t ref_count;
-	/// Mode the file was opened with.
-	uint32_t mode;
+	ARC_GraphNode *node;
 } ARC_File;
 
 // NOTE: No function pointer in a driver definition
 //       should be NULL.
 typedef struct ARC_DriverDef {
-	int (*init)(struct ARC_Resource *res, void *args);
-	int (*uninit)(struct ARC_Resource *res);
-	size_t (*write)(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res);
-	size_t (*read)(void *buffer, size_t size, size_t count, struct ARC_File *file, struct ARC_Resource *res);
-	int (*seek)(struct ARC_File *file, struct ARC_Resource *res);
-	int (*rename)(char *a, char *b, struct ARC_Resource *res);
-	int (*stat)(struct ARC_Resource *res, char *path, struct stat *stat);
-	void *(*control)(struct ARC_Resource *res, void *buffer, size_t size);
-	int (*create)(struct ARC_Resource *res, char *path, uint32_t mode, int type);
-	int (*remove)(struct ARC_Resource *res, char *path);
-	void *(*locate)(struct ARC_Resource *res, char *path);
+	int (*init)(ARC_Resource *res, void *args);
+	int (*uninit)(ARC_Resource *res);
+	size_t (*write)(void *buffer, size_t size, size_t count, ARC_File *file, ARC_Resource *res);
+	size_t (*read)(void *buffer, size_t size, size_t count, ARC_File *file, ARC_Resource *res);
+	int (*seek)(ARC_File *file, ARC_Resource *res);
+	int (*rename)(char *a, char *b, ARC_Resource *res);
+	int (*stat)(ARC_Resource *res, char *path, struct stat *stat);
+	void *(*control)(ARC_Resource *res, void *buffer, size_t size);
+	int (*create)(ARC_Resource *res, char *path, uint32_t mode, int type);
+	int (*remove)(ARC_Resource *res, char *path);
+	void *(*locate)(ARC_Resource *res, char *path);
  	uint32_t *pci_codes; // Terminates with ARC_DRI_PCI_TERMINATOR if non-NULL
 	uint64_t *acpi_codes; // Terminates with ARC_DRI_ACPI_TERMINATOR if non-NULL
 } ARC_DriverDef;
 
-ARC_Resource *init_resource(uint64_t dri_index, void *args);
+ARC_Resource *init_resource(int64_t dri_index, void *args);
 ARC_Resource *init_pci_resource(ARC_PCIHeaderMeta *meta);
 ARC_Resource *init_acpi_resource(uint64_t hid_hash, void *args);
 int uninit_resource(struct ARC_Resource *resource);
