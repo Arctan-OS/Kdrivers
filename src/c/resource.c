@@ -32,19 +32,10 @@
 #include "lib/util.h"
 #include "mm/allocator.h"
 
-/*
-** Driver Groups:
-**  Group Number | Description
-**  0            | Base filesystem drivers.
-**  1            | User filesystem drivers.
-**  2            | User device drivers.
-**  3            | Base device drivers.
-*/
-
 uint64_t current_id = 0;
 
 ARC_Resource *init_resource(ARC_DriverDef *dri_list, int64_t dri_index, void *args) {
-	if (dri_index >= ARC_DRIDEF_COUNT || dri_index == -1) {
+	if (dri_index >= ARC_DRIDEF_COUNT || dri_index == -1 || dri_list == NULL) {
 		ARC_DEBUG(ERR, "Invalid driver index (0x%"PRIx64")\n", dri_index);
 		return NULL;
 	}
@@ -67,7 +58,7 @@ ARC_Resource *init_resource(ARC_DriverDef *dri_list, int64_t dri_index, void *ar
 	resource->dri_index = dri_index;
 
 	// Fetch and set the appropriate definition
-	struct ARC_DriverDef *def = _DRIVER_LOOKUP_TABLE[dri_index];
+	struct ARC_DriverDef *def = dri_list[dri_index];
 	resource->driver = def;
 
 	if (def == NULL) {

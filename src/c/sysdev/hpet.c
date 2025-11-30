@@ -71,7 +71,7 @@ static uint64_t acpi_codes[] = {
         ARC_DRIDEF_ACPI_TERMINATOR
 };
 
-ARC_REGISTER_DRIVER(3, hpet,) = {
+ARC_REGISTER_DRIVER(ARC_DRI_GROUP_DEV_CHAR, hpet) = {
         .init = init_hpet,
 	.uninit = uninit_hpet,
 	.read = read_hpet,

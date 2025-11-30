@@ -447,7 +447,7 @@ struct ext2_inode *ext2_read_inode(struct ext2_super_driver_state *state, uint64
 	return buffer;
 }
 
-ARC_REGISTER_DRIVER(0, ext2, super) = {
+ARC_REGISTER_DRIVER(ARC_DRI_GROUP_FS_SUPER, ext2) = {
         .init = init_ext2_super,
 	.uninit = uninit_ext2_super,
 	.write = write_ext2_super,

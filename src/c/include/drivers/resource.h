@@ -37,14 +37,22 @@
 #define ARC_REGISTER_DRIVER(group, name) \
 	ARC_DriverDef _driver_##name##_##group
 
+#define ARC_SHARE_DRIVER_INDICES(...) ;
+
+enum ARC_DRI_GROUP {
+        ARC_DRI_GROUP_FS_SUPER = 0,
+	ARC_DRI_GROUP_FS_DIR,
+	ARC_DRI_GROUP_FS_FILE,
+	ARC_DRI_GROUP_DEV_BLOCK,
+	ARC_DRI_GROUP_DEV_CHAR,
+};
+
+ARC_SHARE_DRIVER_INDICES(ARC_DRI_GROUP_FS_SUPER, ARC_DRI_GROUP_FS_DIR, ARC_DRI_GROUP_FS_FILE)
+
 typedef struct ARC_Resource {
-	/// ID
 	uint64_t id;
-	/// Specific driver function set (supplied on init by caller).
 	uint64_t dri_index;
-	/// Driver functions.
 	struct ARC_DriverDef *driver;
-	/// State managed by driver, owned by resource.
 	void *driver_state;
 } ARC_Resource;
 

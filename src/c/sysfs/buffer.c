@@ -143,7 +143,7 @@ static int buffer_stat(struct ARC_Resource *res, char *filename, struct stat *st
 	return 0;
 }
 
-ARC_REGISTER_DRIVER(0, buffer, file) = {
+ARC_REGISTER_DRIVER(ARC_DRI_GROUP_FS_FILE, buffer) = {
 	.init = buffer_init,
 	.uninit = buffer_uninit,
 	.read = buffer_read,
@@ -151,28 +151,5 @@ ARC_REGISTER_DRIVER(0, buffer, file) = {
 	.seek = buffer_seek,
 	.rename = dridefs_int_func_empty,
 	.stat = buffer_stat,
-	.pci_codes = NULL
-};
-
-// Directory and super drivers are unused, they are not needed
-ARC_REGISTER_DRIVER(0, buffer, directory) = {
-	.init = dridefs_int_func_empty,
-	.uninit = dridefs_int_func_empty,
-	.read = dridefs_size_t_func_empty,
-	.write = dridefs_size_t_func_empty,
-	.seek = dridefs_int_func_empty,
-	.rename = dridefs_int_func_empty,
-	.stat = dridefs_int_func_empty,
-	.pci_codes = NULL
-};
-
-ARC_REGISTER_DRIVER(0, buffer, super) = {
-	.init = dridefs_int_func_empty,
-	.uninit = dridefs_int_func_empty,
-	.read = dridefs_size_t_func_empty,
-	.write = dridefs_size_t_func_empty,
-	.seek = dridefs_int_func_empty,
-	.rename = dridefs_int_func_empty,
-	.stat = dridefs_int_func_empty,
 	.pci_codes = NULL
 };

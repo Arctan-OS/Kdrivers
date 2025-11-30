@@ -318,7 +318,7 @@ static uint64_t acpi_codes[] = {
 	ARC_DRIDEF_ACPI_TERMINATOR
 };
 
-ARC_REGISTER_DRIVER(3, uart,) = {
+ARC_REGISTER_DRIVER(ARC_DRI_GROUP_DEV_CHAR, uart) = {
         .init = init_uart,
 	.uninit = uninit_uart,
         .read = read_uart,

@@ -393,7 +393,7 @@ static uint32_t pci_codes[] = {
         ARC_DRIDEF_PCI_TERMINATOR
 };
 
-ARC_REGISTER_DRIVER(3, nvme,) = {
+ARC_REGISTER_DRIVER(ARC_DRI_GROUP_DEV_BLOCK, nvme) = {
         .init = init_nvme,
 	.uninit = uninit_nvme,
 	.read = read_nvme,

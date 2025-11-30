@@ -83,7 +83,7 @@ static uint64_t acpi_codes[] = {
 	ARC_DRIDEF_ACPI_TERMINATOR
 };
 
-ARC_REGISTER_DRIVER(3, rtc,) = {
+ARC_REGISTER_DRIVER(ARC_DRI_GROUP_DEV_CHAR, rtc) = {
         .init = init_rtc,
 	.uninit = uninit_rtc,
         .read = read_rtc,

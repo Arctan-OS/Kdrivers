@@ -129,7 +129,7 @@ static int stat_partition_dummy(struct ARC_Resource *res, char *filename, struct
 	return 0;
 }
 
-ARC_REGISTER_DRIVER(3, partition_dummy,) = {
+ARC_REGISTER_DRIVER(ARC_DRI_GROUP_DEV_BLOCK, partition_dummy) = {
         .init = init_partition_dummy,
 	.uninit = uninit_partition_dummy,
 	.read = read_partition_dummy,
