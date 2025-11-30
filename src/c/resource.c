@@ -43,7 +43,7 @@
 
 uint64_t current_id = 0;
 
-ARC_Resource *init_resource(int64_t dri_index, void *args) {
+ARC_Resource *init_resource(ARC_DriverDef *dri_list, int64_t dri_index, void *args) {
 	if (dri_index >= ARC_DRIDEF_COUNT || dri_index == -1) {
 		ARC_DEBUG(ERR, "Invalid driver index (0x%"PRIx64")\n", dri_index);
 		return NULL;

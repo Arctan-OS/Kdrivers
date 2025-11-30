@@ -34,8 +34,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define ARC_REGISTER_DRIVER(group, name, ext) \
-	ARC_DriverDef _driver_##name##_##ext
+#define ARC_REGISTER_DRIVER(group, name) \
+	ARC_DriverDef _driver_##name##_##group
 
 typedef struct ARC_Resource {
 	/// ID
@@ -73,7 +73,7 @@ typedef struct ARC_DriverDef {
 	uint64_t *acpi_codes; // Terminates with ARC_DRI_ACPI_TERMINATOR if non-NULL
 } ARC_DriverDef;
 
-ARC_Resource *init_resource(int64_t dri_index, void *args);
+ARC_Resource *init_resource(ARC_DriverDef *dri_list, int64_t dri_index, void *args);
 ARC_Resource *init_pci_resource(ARC_PCIHeaderMeta *meta);
 ARC_Resource *init_acpi_resource(uint64_t hid_hash, void *args);
 int uninit_resource(struct ARC_Resource *resource);
