@@ -80,10 +80,10 @@ static int stat_rtc(struct ARC_Resource *res, char *filename, struct stat *stat)
 
 static uint64_t acpi_codes[] = {
 	0x95368E5074F817D9,
-	ARC_DRIDEF_ACPI_TERMINATOR
+	ARC_DRIDEF_CODES_TERMINATOR
 };
 
-ARC_REGISTER_DRIVER(ARC_DRI_GROUP_DEV_CHAR, rtc) = {
+ARC_REGISTER_DRIVER(ARC_DRIGRP_DEV_ACPI, rtc) = {
         .init = init_rtc,
 	.uninit = uninit_rtc,
         .read = read_rtc,
@@ -91,7 +91,7 @@ ARC_REGISTER_DRIVER(ARC_DRI_GROUP_DEV_CHAR, rtc) = {
 	.seek = dridefs_int_func_empty,
 	.rename = dridefs_int_func_empty,
 	.stat = stat_rtc,
-	.acpi_codes = acpi_codes
+	.codes = acpi_codes
 };
 
 #undef NAME_FORMAT

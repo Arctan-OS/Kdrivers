@@ -315,10 +315,10 @@ static int stat_uart(struct ARC_Resource *res, char *filename, struct stat *stat
 
 static uint64_t acpi_codes[] = {
 	0x9D2E741F3E2DEEC7, 
-	ARC_DRIDEF_ACPI_TERMINATOR
+	ARC_DRIDEF_CODES_TERMINATOR
 };
 
-ARC_REGISTER_DRIVER(ARC_DRI_GROUP_DEV_CHAR, uart) = {
+ARC_REGISTER_DRIVER(ARC_DRIGRP_DEV_ACPI, uart) = {
         .init = init_uart,
 	.uninit = uninit_uart,
         .read = read_uart,
@@ -326,7 +326,7 @@ ARC_REGISTER_DRIVER(ARC_DRI_GROUP_DEV_CHAR, uart) = {
 	.seek = dridefs_int_func_empty,
 	.rename = dridefs_int_func_empty,
 	.stat = stat_uart,
-	.acpi_codes = acpi_codes
+	.codes = acpi_codes
 };
 
 #undef NAME_FORMAT

@@ -228,7 +228,7 @@ int nvme_enumerate_enabled_command_sets(struct controller_state *state, uint64_t
 				.command_set = idx
 		        };
 
-			init_resource(ARC_DRIDEF_NVME_NAMESPACE, &args);
+			init_resource(ARC_DRIGRP_DEV, ARC_DRIDEF_DEV_NVME_NAMESPACE, &args);
 		}
 
 		pmm_fast_page_free(namespaces);
@@ -388,12 +388,12 @@ static int stat_nvme(struct ARC_Resource *res, char *filename, struct stat *stat
 	return 0;
 }
 
-static uint32_t pci_codes[] = {
+static uint64_t pci_codes[] = {
         0x1b360010,
-        ARC_DRIDEF_PCI_TERMINATOR
+        ARC_DRIDEF_CODES_TERMINATOR
 };
 
-ARC_REGISTER_DRIVER(ARC_DRI_GROUP_DEV_BLOCK, nvme) = {
+ARC_REGISTER_DRIVER(ARC_DRIGRP_DEV_PCI, nvme) = {
         .init = init_nvme,
 	.uninit = uninit_nvme,
 	.read = read_nvme,
@@ -401,7 +401,7 @@ ARC_REGISTER_DRIVER(ARC_DRI_GROUP_DEV_BLOCK, nvme) = {
 	.seek = dridefs_int_func_empty,
 	.rename = dridefs_int_func_empty,
 	.stat = stat_nvme,
-	.pci_codes = pci_codes
+	.codes = pci_codes
 };
 
 #undef NAME_FORMAT

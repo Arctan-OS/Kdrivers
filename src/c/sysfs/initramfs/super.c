@@ -143,7 +143,7 @@ static void *initramfs_locate(struct ARC_Resource *res, char *filename) {
 	return ret;
 }
 
-ARC_REGISTER_DRIVER(ARC_DRI_GROUP_FS_SUPER, initramfs) = {
+ARC_REGISTER_DRIVER(ARC_DRIGRP_FS_SUPER, initramfs) = {
 	.init = initramfs_init,
 	.uninit = initramfs_uninit,
 	.read = dridefs_size_t_func_empty,

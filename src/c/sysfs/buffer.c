@@ -143,7 +143,7 @@ static int buffer_stat(struct ARC_Resource *res, char *filename, struct stat *st
 	return 0;
 }
 
-ARC_REGISTER_DRIVER(ARC_DRI_GROUP_FS_FILE, buffer) = {
+ARC_REGISTER_DRIVER(ARC_DRIGRP_FS_FILE, buffer) = {
 	.init = buffer_init,
 	.uninit = buffer_uninit,
 	.read = buffer_read,
@@ -151,5 +151,5 @@ ARC_REGISTER_DRIVER(ARC_DRI_GROUP_FS_FILE, buffer) = {
 	.seek = buffer_seek,
 	.rename = dridefs_int_func_empty,
 	.stat = buffer_stat,
-	.pci_codes = NULL
+	.codes = NULL
 };

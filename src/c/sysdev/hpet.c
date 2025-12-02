@@ -68,10 +68,10 @@ static int stat_hpet(struct ARC_Resource *res, char *filename, struct stat *stat
 
 static uint64_t acpi_codes[] = {
         0x326C57FE82510B91,
-        ARC_DRIDEF_ACPI_TERMINATOR
+        ARC_DRIDEF_CODES_TERMINATOR
 };
 
-ARC_REGISTER_DRIVER(ARC_DRI_GROUP_DEV_CHAR, hpet) = {
+ARC_REGISTER_DRIVER(ARC_DRIGRP_DEV_ACPI, hpet) = {
         .init = init_hpet,
 	.uninit = uninit_hpet,
 	.read = read_hpet,
@@ -79,5 +79,5 @@ ARC_REGISTER_DRIVER(ARC_DRI_GROUP_DEV_CHAR, hpet) = {
 	.seek = dridefs_int_func_empty,
 	.rename = dridefs_int_func_empty,
 	.stat = stat_hpet,
-        .acpi_codes = acpi_codes
+        .codes = acpi_codes
 };

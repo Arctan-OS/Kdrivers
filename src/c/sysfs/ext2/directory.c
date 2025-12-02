@@ -146,7 +146,7 @@ static void *locate_ext2_directory(struct ARC_Resource *res, char *filename) {
 	return args;
 }
 
-ARC_REGISTER_DRIVER(ARC_DRI_GROUP_FS_DIR, ext2) = {
+ARC_REGISTER_DRIVER(ARC_DRIGRP_FS_DIR, ext2) = {
         .init = init_ext2_directory,
 	.uninit = uninit_ext2_directory,
 	.write = write_ext2_directory,

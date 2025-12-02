@@ -118,7 +118,7 @@ static int stat_ext2_file(struct ARC_Resource *res, char *filename, struct stat 
 	return 0;
 }
 
-ARC_REGISTER_DRIVER(ARC_DRI_GROUP_FS_FILE, ext2) = {
+ARC_REGISTER_DRIVER(ARC_DRIGRP_FS_FILE, ext2) = {
         .init = init_ext2_file,
 	.uninit = uninit_ext2_file,
 	.write = write_ext2_file,

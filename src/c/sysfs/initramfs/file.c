@@ -161,7 +161,7 @@ static int initramfs_stat(struct ARC_Resource *res, char *filename, struct stat 
 	return 0;
 }
 
-ARC_REGISTER_DRIVER(ARC_DRI_GROUP_FS_FILE, initramfs) = {
+ARC_REGISTER_DRIVER(ARC_DRIGRP_FS_FILE, initramfs) = {
 	.init = initramfs_init,
 	.uninit = initramfs_uninit,
 	.read = initramfs_read,

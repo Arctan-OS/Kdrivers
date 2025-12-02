@@ -263,7 +263,7 @@ static int stat_nvme_namespace(struct ARC_Resource *res, char *filename, struct 
 	return 0;
 }
 
-ARC_REGISTER_DRIVER(ARC_DRI_GROUP_DEV_BLOCK, nvme_namespace) = {
+ARC_REGISTER_DRIVER(ARC_DRIGRP_DEV, nvme_namespace) = {
         .init = init_nvme_namespace,
 	.uninit = uninit_nvme_namespace,
 	.read = read_nvme_namespace,
