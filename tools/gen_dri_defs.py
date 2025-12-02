@@ -33,6 +33,13 @@ import sys
 from pathlib import Path
 from datetime import datetime, UTC
 
+group_enum_prefix = "ARC_DRIGRP_"
+driver_table_prefix = "arc_dris_"
+definition_prefix = "ARC_DRIDEF_"
+
+ARC_REGISTER_DRIVER = "ARC_REGISTER_DRIVER"
+ARC_SHARE_DRIVER_INDICES = "ARC_SHARE_DRIVER_INDICES"
+
 def get_group_indices_and_symbols(root_dir):
   source = list(Path(root_dir).rglob("*resource.h"))[0]
   symbols = {}
@@ -41,6 +48,7 @@ def get_group_indices_and_symbols(root_dir):
 
   for line in list(open(str(source), "r")):
     if ("enum ARC_DRI_GROUP" in line):
+      print("Found driver group enum, grabbing symbols")
       recording = True
       continue
 
@@ -57,6 +65,7 @@ def get_group_indices_and_symbols(root_dir):
       idx = int(t[1])
       clean = t[0]
 
+    print("\t"+clean,"at",idx)
     symbols[clean] = idx
 
     idx = idx + 1
@@ -67,12 +76,14 @@ def get_shared_groups(root_dir):
   source = list(Path(root_dir).rglob("*resource.h"))[0]
   shared = []
 
+  print("Looking for shared resources")
   for line in list(open(str(source), "r")):
-      if (not "ARC_SHARE_DRIVER_INDICES" in line or "#define" in line):
+      if (not ARC_SHARE_DRIVER_INDICES in line or "#define" in line):
         continue
 
       clean = line.replace(' ','').split("(")[1].split(")")[0]
 
+      print("\t"+str(clean.split(",")),"are shared")
       shared.append(clean.split(","))
 
   return shared
@@ -85,7 +96,7 @@ def enumerate_source_files(root_dir):
     print("Found source file:", str(source))
 
     for line in reversed(list(open(str(source), "r"))):
-      if (not "ARC_REGISTER_DRIVER" in line or "#define" in line):
+      if (not ARC_REGISTER_DRIVER in line or "#define" in line):
         continue
 
       clean = line.replace(' ', '').split('(')[1].split(')')[0].split(',')
@@ -107,7 +118,13 @@ def fill_in_indices(definitions, shared_groups, symbols):
 
   for definition in definitions:
     for name in definitions[definition]:
-      idx = indices[definition]
+      try:
+        idx = indices[definition]
+      except:
+        print("ERROR: Unknown group \"{0}\", used on drivers:".format(definition))
+        for name in definitions[definition]:
+          print("\t"+name)
+        sys.exit(-1)
       shared_increment = [definition]
 
       for cluster in shared_groups:
@@ -140,12 +157,12 @@ header_preamble = '''/*
 #include <stdint.h>
 #include <stdint.h>
 
-#define ARC_DRIDEF_PCI_TERMINATOR ((uint32_t)-1)
-#define ARC_DRIDEF_ACPI_TERMINATOR ((uint64_t)-1)
+#define ARC_DRIDEF_CODES_TERMINATOR ((uint64_t)-1)
 
+extern const ARC_DriverDef **{1}table[];
 extern const ARC_DriverDef _empty_driver;
 
-'''.format(datetime.now(UTC).strftime("%d-%m-%Y"))
+'''.format(datetime.now(UTC).strftime("%d-%m-%Y"), driver_table_prefix)
 
 header_postamble = '''
 int dridefs_int_func_empty();
@@ -163,20 +180,19 @@ def construct_dri_defs_header(definitions, out_file):
   lines = []
 
   for definition in definitions:
-    table_name = definition.replace("ARC_DRI_GROUP_", '')
+    table_name = definition.replace(group_enum_prefix, '')
     print("Generating definitions for table:", table_name.lower())
 
-    lines.append("extern const ARC_DriverDef *arc_drivers_{0}[];\n".format(table_name.lower()))
+    lines.append("extern const ARC_DriverDef *{1}{0}[];\n".format(table_name.lower(), driver_table_prefix))
 
     for name in definitions[definition]:
       idx = definitions[definition][name]
       if (idx < 0):
         continue
 
-      lines.append("#define ARC_DRIDEF_{2}_{4} {3}\nextern ARC_DriverDef _{0}_{1};\n".format(name, definition, table_name, idx, name.upper()))
+      lines.append("#define {5}{2}_{4} {3}\nextern ARC_DriverDef _{0}_{1};\n".format(name, definition, table_name, idx, name.upper(), definition_prefix))
 
   for line in sorted(lines):
-    print(line)
     out.write(line)
 
   out.write(header_postamble)
@@ -205,8 +221,7 @@ const ARC_DriverDef _empty_driver = {{
 
 '''.format(datetime.now(UTC).strftime("%d-%m-%Y"))
 
-source_postamble = '''
-int dridefs_int_func_empty() {
+source_postamble = '''int dridefs_int_func_empty() {
 \treturn -1;
 }
 
@@ -219,31 +234,50 @@ void *dridefs_void_func_empty() {
 }
 '''
 
-def construct_dri_defs_source(definitions, out_file):
+def construct_dri_defs_source(definitions, symbols, out_file):
   out = open(out_file, "w")
 
   out.write(source_preamble)
 
   for definition in definitions:
-    table_name = definition.replace("ARC_DRI_GROUP_", '')
+    table_name = definition.replace(group_enum_prefix, '')
     print("Generating table:", table_name.lower())
 
     lines = []
 
-    out.write("const ARC_DriverDef *arc_drivers_{0}[] = {{\n".format(table_name.lower()))
+    largest_idx = definitions[definition][max(definitions[definition], key=definitions[definition].get)] + 1
+    out.write("const ARC_DriverDef *{2}{0}[{1}] = {{\n".format(table_name.lower(), largest_idx, driver_table_prefix))
 
+    i = 0
     for name in definitions[definition]:
       idx = definitions[definition][name]
+
+      if (idx == largest_idx):
+        break
+
+      i = i + 1
       if (idx < 0):
-        continue
-
-      lines.append("\t[{2}] = &_{0}_{1},\n".format(name, definition, idx))
-
+        lines.append("\t[{0}] = NULL,\n".format(i))       
+      else:
+        lines.append("\t[{2}] = &_{0}_{1},\n".format(name, definition, idx))       
+      
     for line in sorted(lines):
       out.write(line)
 
-    out.write("};\n")
+    out.write("};\n\n")
 
+  lines = []
+  largest_idx = symbols[max(symbols, key=symbols.get)] + 1
+  out.write("const ARC_DriverDef **{0}drivers[{1}] = {{\n".format(driver_table_prefix, largest_idx))  
+  for symbol in symbols:
+    table_name = symbol.replace(group_enum_prefix, '')
+    lines.append("\t[{0}] = &{1}{2},\n".format(symbols[symbol], driver_table_prefix, table_name.lower()))
+
+  for line in sorted(lines):
+    out.write(line)
+
+  out.write("};\n\n")   
+     
   out.write(source_postamble)
 
   return 0
@@ -263,7 +297,7 @@ def main():
   definitions = fill_in_indices(definitions, shared, symbols)
 
   r = construct_dri_defs_header(definitions, header_out)
-  r = r + construct_dri_defs_source(definitions, source_out)
+  r = r + construct_dri_defs_source(definitions, symbols, source_out)
   return r
 
 if (__name__ == "__main__"):
