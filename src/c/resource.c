@@ -32,14 +32,23 @@
 #include "lib/util.h"
 #include "mm/allocator.h"
 
-uint64_t current_id = 0;
+static uint64_t current_id = 0;
 
-ARC_Resource *init_resource(ARC_DriverDef *dri_list, int64_t dri_index, void *args) {
-	if (dri_index >= ARC_DRIDEF_COUNT || dri_index == -1 || dri_list == NULL) {
-		ARC_DEBUG(ERR, "Invalid driver index (0x%"PRIx64")\n", dri_index);
+ARC_Resource *init_resource(int dri_group, int64_t dri_index, void *args) {
+        int entry_count = dridefs_get_entry_count(dri_group);
+	if (dri_group < 0 || dri_index < 0 || dri_group >= ARC_DRIDEF_DRIVER_GROUPS
+            || dri_index >= entry_count) {
+		ARC_DEBUG(ERR, "Invalid parameters group: !(0<=%d<%d) or index: !(0<=%d<%d) are true\n", dri_group, ARC_DRIDEF_DRIVER_GROUPS, dri_index, entry_count);
 		return NULL;
 	}
 
+	ARC_DriverDef *def = arc_dris_table[dri_group][dri_index];
+        
+        if (def == NULL || def->init == NULL) {
+		ARC_DEBUG(ERR, "No driver definition found\n");
+		return NULL;
+	}
+        
 	ARC_Resource *resource = (struct ARC_Resource *)alloc(sizeof(struct ARC_Resource));
 
 	if (resource == NULL) {
@@ -51,29 +60,10 @@ ARC_Resource *init_resource(ARC_DriverDef *dri_list, int64_t dri_index, void *ar
 
 	ARC_DEBUG(INFO, "Initializing resource %lu (Index: %lu)\n", current_id, dri_index);
 
-	// Initialize resource properties
-	resource->id = ARC_ATOMIC_LOAD(current_id);
-	ARC_ATOMIC_INC(current_id);
-
+	resource->id = ARC_ATOMIC_INC(current_id) - 1;
+        resource->dri_group = dri_group;
 	resource->dri_index = dri_index;
-
-	// Fetch and set the appropriate definition
-	struct ARC_DriverDef *def = dri_list[dri_index];
 	resource->driver = def;
-
-	if (def == NULL) {
-		free(resource);
-		ARC_DEBUG(ERR, "No driver definition found\n");
-
-		return NULL;
-	}
-
-	if (def->init == NULL) {
-		free(resource);
-		ARC_DEBUG(ERR, "Driver does not define an initialization function\n");
-
-		return NULL;
-	}
 
 	int ret = def->init(resource, args);
 
@@ -87,26 +77,22 @@ ARC_Resource *init_resource(ARC_DriverDef *dri_list, int64_t dri_index, void *ar
 	return resource;
 }
 
-static uint64_t get_dri_def_pci(uint16_t vendor, uint16_t device) {
-	uint32_t target = (vendor << 16) | device;
+static int internal_find_code(uint64_t target, int group) {
+        int count = dridefs_get_entry_count(group);
+        
+	for (uint64_t i = 0; i < count; i++) {
+		ARC_DriverDef *def = arc_dris_table[group][i];
 
-	for (uint64_t i = 0; i < ARC_DRIDEF_COUNT; i++) {
-		struct ARC_DriverDef *def = _DRIVER_LOOKUP_TABLE[i];
-
-		if (def->pci_codes == NULL) {
+		if (def == NULL || def->codes == NULL) {
 			continue;
 		}
 
-		for (uint32_t code = 0;; code++) {
-			if (def->pci_codes[code] == ARC_DRIDEF_PCI_TERMINATOR) {
-				break;
-			} else if (def->pci_codes[code] == target) {
-				return i;
+		for (uint32_t code = 0; def->codes[code] != ARC_DRIDEF_CODES_TERMINATOR; code++) {
+			if (def->codes[code] == target) {
+                                return i;
 			}
 		}
 	}
-
-	return (uint64_t)-1;
 }
 
 ARC_Resource *init_pci_resource(ARC_PCIHeaderMeta *meta) {
@@ -118,29 +104,13 @@ ARC_Resource *init_pci_resource(ARC_PCIHeaderMeta *meta) {
 		return NULL;
 	}
 
-	ARC_DEBUG(INFO, "Initializing PCI resource 0x%04x:0x%04x\n", vendor, device);
+        uint32_t target = (vendor << 16) | device;
+        int group = ARC_DRIGRP_DEV_PCI;
+        int index = internal_find_code(target, group);
 
-	return init_resource(get_dri_def_pci(vendor, device), meta);
-}
-
-static uint64_t get_dri_def_acpi(uint64_t hid_hash) {
-	for (uint64_t i = 0; i < ARC_DRIDEF_COUNT; i++) {
-		struct ARC_DriverDef *def = _DRIVER_LOOKUP_TABLE[i];
-
-		if (def->acpi_codes == NULL) {
-			continue;
-		}
-
-		for (uint32_t code = 0;; code++) {
-			if (def->acpi_codes[code] == ARC_DRIDEF_ACPI_TERMINATOR) {
-				break;
-			} else if (def->acpi_codes[code] == hid_hash) {
-				return i;
-			}
-		}
-	}
-
-	return (uint64_t)-1;
+        ARC_DEBUG(INFO, "Initializing PCI resource %04X:%04X (%d, %d)\n", vendor, device, group, index);
+        
+        return init_resource(group, index, (void *)meta);
 }
 
 ARC_Resource *init_acpi_resource(uint64_t hid_hash, void *args) {
@@ -148,10 +118,13 @@ ARC_Resource *init_acpi_resource(uint64_t hid_hash, void *args) {
 		ARC_DEBUG(WARN, "Skipping ACPI resource initialization\n");
 		return NULL;
 	}
+        
+        int group = ARC_DRIGRP_DEV_ACPI;
+        int index = internal_find_code(hid_hash, group);       
 
-	ARC_DEBUG(INFO, "Initializing ACPI resource (%"PRIX64")\n", hid_hash);
-
-	return init_resource(get_dri_def_acpi(hid_hash), args);
+        ARC_DEBUG(INFO, "Initializing ACPI resource 0x%"PRIX64" (%d, %d)\n", hid_hash, group, index);
+        
+        return init_resource(group, index, args);
 }
 
 int uninit_resource(struct ARC_Resource *resource) {

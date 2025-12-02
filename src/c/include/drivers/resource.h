@@ -40,48 +40,47 @@
 #define ARC_SHARE_DRIVER_INDICES(...) ;
 
 enum ARC_DRI_GROUP {
-        ARC_DRI_GROUP_FS_SUPER = 0,
-	ARC_DRI_GROUP_FS_DIR,
-	ARC_DRI_GROUP_FS_FILE,
-	ARC_DRI_GROUP_DEV_BLOCK,
-	ARC_DRI_GROUP_DEV_CHAR,
+        ARC_DRIGRP_FS_SUPER = 0,
+	ARC_DRIGRP_FS_DIR,
+	ARC_DRIGRP_FS_FILE,
+	ARC_DRIGRP_DEV_ACPI,
+	ARC_DRIGRP_DEV_PCI,
+        ARC_DRIGRP_DEV,
 };
 
-ARC_SHARE_DRIVER_INDICES(ARC_DRI_GROUP_FS_SUPER, ARC_DRI_GROUP_FS_DIR, ARC_DRI_GROUP_FS_FILE)
+ARC_SHARE_DRIVER_INDICES(ARC_DRIGRP_FS_SUPER, ARC_DRIGRP_FS_DIR, ARC_DRIGRP_FS_FILE)
 
 typedef struct ARC_Resource {
 	uint64_t id;
 	uint64_t dri_index;
 	struct ARC_DriverDef *driver;
 	void *driver_state;
+        int dri_group;
 } ARC_Resource;
 
 typedef struct ARC_File {
-	/// Current offset into the file.
 	long offset;
-	/// Pointer to the VFS node.
 	ARC_GraphNode *node;
 } ARC_File;
 
 // NOTE: No function pointer in a driver definition
 //       should be NULL.
 typedef struct ARC_DriverDef {
-	int (*init)(ARC_Resource *res, void *args);
-	int (*uninit)(ARC_Resource *res);
-	size_t (*write)(void *buffer, size_t size, size_t count, ARC_File *file, ARC_Resource *res);
-	size_t (*read)(void *buffer, size_t size, size_t count, ARC_File *file, ARC_Resource *res);
-	int (*seek)(ARC_File *file, ARC_Resource *res);
-	int (*rename)(char *a, char *b, ARC_Resource *res);
-	int (*stat)(ARC_Resource *res, char *path, struct stat *stat);
-	void *(*control)(ARC_Resource *res, void *buffer, size_t size);
-	int (*create)(ARC_Resource *res, char *path, uint32_t mode, int type);
-	int (*remove)(ARC_Resource *res, char *path);
-	void *(*locate)(ARC_Resource *res, char *path);
- 	uint32_t *pci_codes; // Terminates with ARC_DRI_PCI_TERMINATOR if non-NULL
-	uint64_t *acpi_codes; // Terminates with ARC_DRI_ACPI_TERMINATOR if non-NULL
+	int    (*init)   (ARC_Resource *res, void *args);
+	int    (*uninit) (ARC_Resource *res);
+	size_t (*write)  (void *buffer, size_t size, size_t count, ARC_File *file, ARC_Resource *res);
+	size_t (*read)   (void *buffer, size_t size, size_t count, ARC_File *file, ARC_Resource *res);
+	int    (*seek)   (ARC_File *file, ARC_Resource *res);
+	int    (*rename) (char *from, char *to, ARC_Resource *res);
+	int    (*stat)   (ARC_Resource *res, char *path, struct stat *stat);
+	void  *(*control)(ARC_Resource *res, void *buffer, size_t size);
+	int    (*create) (ARC_Resource *res, char *path, uint32_t mode, int type);
+	int    (*remove) (ARC_Resource *res, char *path);
+	void  *(*locate) (ARC_Resource *res, char *path);
+	uint64_t *codes; // Terminate with ARC_DRIDEF_CODES_TERMINATOR
 } ARC_DriverDef;
 
-ARC_Resource *init_resource(ARC_DriverDef *dri_list, int64_t dri_index, void *args);
+ARC_Resource *init_resource(int dri_group, int64_t dri_index, void *args);
 ARC_Resource *init_pci_resource(ARC_PCIHeaderMeta *meta);
 ARC_Resource *init_acpi_resource(uint64_t hid_hash, void *args);
 int uninit_resource(struct ARC_Resource *resource);
