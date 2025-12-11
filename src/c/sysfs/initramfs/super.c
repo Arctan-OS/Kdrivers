@@ -61,6 +61,10 @@ static void *initramfs_find_file(void *fs, char *filename) {
 		return NULL;
 	}
 
+        if (*filename == '/') {
+                filename++;
+        }
+        
 	struct ARC_HeaderCPIO *header = (struct ARC_HeaderCPIO *)fs;
 	uint64_t offset = 0;
 
