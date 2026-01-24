@@ -258,12 +258,12 @@ static int init_uart(struct ARC_Resource *res, void *args) {
 	state->port_base = dev_info->io->base;
 	state->align = dev_info->io->align;
 	res->driver_state = state;
-	
+        
+	/*	
 	char path[64] = { 0 };
 
 	sprintf(path, NAME_FORMAT, instance_counter++);
 
-	/*
 	struct ARC_VFSNodeInfo info = {
 		.type = ARC_VFS_N_DEV,
 		.mode = ARC_STD_PERM,

@@ -285,7 +285,9 @@ void *dridefs_void_func_empty() {
   for symbol in symbols:
     largest_idx = definitions[symbol][max(definitions[symbol], key=definitions[symbol].get)] + 1
     table_name = symbol.replace(group_enum_prefix, '')
-    lines.append("\t\tcase {0}:\n\t\t\treturn {1};\n\t\t\tbreak;\n".format(symbols[symbol], largest_idx))
+    lines.append("\t\tcase {0}:\n\t\t\treturn {1};\n".format(symbols[symbol], largest_idx))
+
+  lines.append("\t\tdefault:\n\t\t\treturn 0;\n")
     
   for line in lines:
     out.write(line)

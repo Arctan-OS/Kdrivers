@@ -53,7 +53,7 @@ ARC_SHARE_DRIVER_INDICES(ARC_DRIGRP_FS_SUPER, ARC_DRIGRP_FS_DIR, ARC_DRIGRP_FS_F
 typedef struct ARC_Resource {
 	uint64_t id;
 	uint64_t dri_index;
-	struct ARC_DriverDef *driver;
+	const struct ARC_DriverDef *driver;
 	void *driver_state;
         int dri_group;
 } ARC_Resource;

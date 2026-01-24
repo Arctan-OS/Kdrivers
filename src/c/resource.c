@@ -35,14 +35,14 @@
 static uint64_t current_id = 0;
 
 ARC_Resource *init_resource(int dri_group, int64_t dri_index, void *args) {
-        int entry_count = dridefs_get_entry_count(dri_group);
+        size_t entry_count = dridefs_get_entry_count(dri_group);
 	if (dri_group < 0 || dri_index < 0 || dri_group >= ARC_DRIDEF_DRIVER_GROUPS
-            || dri_index >= entry_count) {
-		ARC_DEBUG(ERR, "Invalid parameters group: !(0<=%d<%d) or index: !(0<=%d<%d) are true\n", dri_group, ARC_DRIDEF_DRIVER_GROUPS, dri_index, entry_count);
+            || (size_t)dri_index >= entry_count) {
+		ARC_DEBUG(ERR, "Invalid parameters group: !(0<=%d<%d) or index: !(0<=%"PRId64"<%lu) are true\n", dri_group, ARC_DRIDEF_DRIVER_GROUPS, dri_index, entry_count);
 		return NULL;
 	}
 
-	ARC_DriverDef *def = arc_dris_table[dri_group][dri_index];
+       	const ARC_DriverDef *def = arc_dris_table[dri_group][dri_index];
         
         if (def == NULL || def->init == NULL) {
 		ARC_DEBUG(ERR, "No driver definition found\n");
@@ -78,10 +78,10 @@ ARC_Resource *init_resource(int dri_group, int64_t dri_index, void *args) {
 }
 
 static int internal_find_code(uint64_t target, int group) {
-        int count = dridefs_get_entry_count(group);
+        size_t count = dridefs_get_entry_count(group);
         
-	for (uint64_t i = 0; i < count; i++) {
-		ARC_DriverDef *def = arc_dris_table[group][i];
+	for (size_t i = 0; i < count; i++) {
+		const ARC_DriverDef *def = arc_dris_table[group][i];
 
 		if (def == NULL || def->codes == NULL) {
 			continue;
@@ -93,6 +93,8 @@ static int internal_find_code(uint64_t target, int group) {
 			}
 		}
 	}
+
+        return -1;
 }
 
 ARC_Resource *init_pci_resource(ARC_PCIHeaderMeta *meta) {
