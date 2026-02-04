@@ -88,7 +88,7 @@ typedef struct ARC_DriverDef {
 	int    (*create) (ARC_Resource *res, char *path, uint32_t mode, int type);
 	int    (*remove) (ARC_Resource *res, char *path);
 	void  *(*locate) (ARC_Resource *res, char *path);
-        ARC_ControlPacketResponse *(*control)(ARC_Resource *res, ARC_ControlPacketInstruction *);
+        ARC_ControlPacketResponse (*control)(ARC_Resource *res, ARC_ControlPacketInstruction *);
 	uint64_t *codes; // Terminate with ARC_DRIDEF_CODES_TERMINATOR
 } ARC_DriverDef;
 
