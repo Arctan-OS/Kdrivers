@@ -12,42 +12,6 @@
 #define SQnTDBL(_properties, _n) ((uintptr_t)_properties->data + ((2 * (_n)) * (4 << MASKED_READ(_properties->cap, 32, 0b1111))))
 #define CQnHDBL(_properties, _n) ((uintptr_t)_properties->data + ((2 * (_n) + 1) * (4 << MASKED_READ(_properties->cap, 32, 0b1111))))
 
-typedef struct ctrl_props {
-	uint64_t cap;
-	uint32_t vs;
-	uint32_t intms;
-	uint32_t intmc;
-	uint32_t cc;
-	uint32_t resv0;
-	uint32_t csts;
-	uint32_t nssr;
-	uint32_t aqa;
-	uint64_t asq;
-	uint64_t acq;
-	uint32_t cmbloc;
-	uint32_t cmbsz;
-	uint32_t bpinfo;
-	uint32_t bprsel;
-	uint64_t bpmbl;
-	uint64_t cmbmsc;
-	uint32_t cmbsts;
-	uint32_t cmbebs;
-	uint32_t cmbswtp;
-	uint32_t nssd;
-	uint32_t crto;
-	uint8_t resv1[0xD94];
-	uint32_t pmrcap;
-	uint32_t pmrctl;
-	uint32_t pmrsts;
-	uint32_t pmrebs;
-	uint32_t pmrswtp;
-	uint32_t pmrmscl;
-	uint32_t pmrmscu;
-	uint8_t resv2[0x1E4];
-	uint8_t data[];
-} __attribute__((packed)) ctrl_props_t;
-STATIC_ASSERT(sizeof(ctrl_props_t) == 0x1000, "Controller properties size mismatch");
-
 typedef struct driver_state {
         ctrl_props_t *props;
         int exposed;
@@ -89,7 +53,7 @@ static qs_wrap_t nvme_pci_submit_command(ARC_Resource *transport, nvme_qpair_t *
 	return (qs_wrap_t){ .cmd = cmd, .qpair = qpair };
 }
 
-static int nvme_pci_poll_completion(ARC_Resource *transport, qs_wrap_t *wrap, qc_entry_t **ret) {
+static int nvme_pci_poll_completion(ARC_Resource *transport, qs_wrap_t *wrap, qc_entry_t *ret) {
 	if (transport == NULL || wrap->cmd == NULL) {
 		return -1;
 	}
@@ -99,7 +63,7 @@ static int nvme_pci_poll_completion(ARC_Resource *transport, qs_wrap_t *wrap, qc
 	qc_entry_t *qc = (struct qc_entry *)qpair->cmpq->base;
         
         bool I = arch_interrupts_enabled();
-        //ARC_ENABLE_INTERRUPT; // Causes a double fault, if commented, waits forever
+        //ARC_ENABLE_INTERRUPT; // Causes a double fault
         
 	size_t i = 0;
 	while (1) {
@@ -117,7 +81,7 @@ static int nvme_pci_poll_completion(ARC_Resource *transport, qs_wrap_t *wrap, qc
 	int status = qc[i].status;
 
 	if (ret != NULL) {
-		memcpy(ret, &qc[i], sizeof(**ret));
+		memcpy(ret, &qc[i], sizeof(*ret));
 	}
 
 	size_t idx = ringbuffer_allocate(qpair->cmpq, 1);
@@ -136,7 +100,7 @@ static int nvme_pci_poll_completion(ARC_Resource *transport, qs_wrap_t *wrap, qc
 	return status;
 }
 
-static int create_admin_queues(driver_state_t *state, size_t qsize) {
+static int create_admin_qpair(driver_state_t *state, size_t qsize) {
 	void *queues = pmm_alloc(qsize * 2);
 
 	if (queues == NULL) {
@@ -190,7 +154,7 @@ static int reset_controller(driver_state_t *state) {
         // TODO: A timeout?
 	while (MASKED_READ(props->csts, 0, 1)) __builtin_ia32_pause();
         
-        if (create_admin_queues(state, PAGE_SIZE) != 0) {
+        if (create_admin_qpair(state, PAGE_SIZE) != 0) {
                 return -2;
         }
         
@@ -231,8 +195,6 @@ int init_nvme_pci(ARC_Resource *res, void *arg) {
                 ARC_DEBUG(ERR, "Failed to allocate state\n");
                 return -1;
         }
-
-        res->driver_state = state;
         
         uint64_t mem_registers_base = 0;
 	uint64_t idx_data_pair_base = 0;
@@ -256,7 +218,8 @@ int init_nvme_pci(ARC_Resource *res, void *arg) {
                         uint32_t attrs = 1 << ARC_PAGER_4K | 1 << ARC_PAGER_NX | 1 << ARC_PAGER_RW | ARC_PAGER_PAT_UC;
                         if (pager_map(NULL, mem_registers_base, mem_registers_base, size, attrs) != 0) {
                                 ARC_DEBUG(ERR, "Failed to map register space\n");
-                                return -1;
+                                free(state);
+                                return -2;
                         }
 
                         state->props = (void *)mem_registers_base;
@@ -267,11 +230,17 @@ int init_nvme_pci(ARC_Resource *res, void *arg) {
 		}
         default:
                 ARC_DEBUG(ERR, "Unhandled header type %d\n", meta->header->common.header_type);
-                break;
+                free(state);
+                return -3;
 	}
 	
-	reset_controller(state);
+	if (reset_controller(state) != 0) {
+                free(state);
+                return -4;
+        }
 
+        res->driver_state = state;
+        
         ARC_Resource *nvme = init_resource(ARC_DRIGRP_DEV, ARC_DRIDEF_DEV_NVME, res);
 
         if (nvme == NULL) {
@@ -294,8 +263,10 @@ static size_t read_nvme_pci(void *buffer, size_t size, size_t count, ARC_File *f
 	if (buffer == NULL || size == 0 || count == 0 || file == NULL || res == NULL) {
 		return 0;
 	}
+
+        ARC_DEBUG(WARN, "Need to implement reading for properties\n");
         
-	return 1;
+	return 0;
 }
 
 static size_t write_nvme_pci(void *buffer, size_t size, size_t count, ARC_File *file, ARC_Resource *res) {
@@ -303,6 +274,8 @@ static size_t write_nvme_pci(void *buffer, size_t size, size_t count, ARC_File *
 		return 0;
 	}
 
+        ARC_DEBUG(WARN, "Need to implement writing for properties\n");
+        
 	return 0;
 }
 
@@ -314,18 +287,14 @@ static int stat_nvme_pci(ARC_Resource *res, char *filename, struct stat *stat) {
 	return 0;
 }
 
-static ARC_ControlPacketResponse *control_nvme_pci(ARC_Resource *res, ARC_ControlPacketInstruction *inst) {
+static ARC_ControlPacketResponse control_nvme_pci(ARC_Resource *res, ARC_ControlPacketInstruction *inst) {
+        ARC_ControlPacketResponse resp = { 0 };
+        
         if (res == NULL || inst == NULL) {
-                return NULL;
+                return resp;
         }
 
-        ARC_ControlPacketResponse *resp = alloc(sizeof(*resp));
-
-        if (resp == NULL) {
-                return NULL;
-        }
-
-        memset(resp, 0, sizeof(*resp));
+        driver_state_t *state = res->driver_state;
         
         switch (inst->command) {
         case NVME_TRANSPORT_CTRL_IDEN: {
@@ -339,18 +308,22 @@ static ARC_ControlPacketResponse *control_nvme_pci(ARC_Resource *res, ARC_Contro
                 iden->poll = nvme_pci_poll_completion;
                 iden->type = NVME_TRANSPORT_TYPE_PCI;
 
-                resp->type = inst->command;
-                resp->data = iden;
-                resp->size = sizeof(*iden);
+                resp.type = inst->command;
+                resp.data = iden;
+                resp.size = sizeof(*iden);
                 
+                return resp;
+        }
+
+        case NVME_TRANSPORT_CTRL_TO_PROPS: {
+                state->exposed = NVME_TRANSPORT_CTRL_TO_PROPS;
                 return resp;
         }
         }
 
  err:
-        free(resp);
         ARC_DEBUG(ERR, "Unhandled command %d\n", inst->command);
-        return NULL;
+        return (ARC_ControlPacketResponse) { 0 };
 }
 
 static uint64_t pci_codes[] = {

@@ -1,46 +1,13 @@
 #include "drivers/sysdev/nvme/nvme.h"
+#include "arch/smp.h"
 #include "drivers/resource.h"
 #include "drivers/dri_defs.h"
+#include "lib/ringbuffer.h"
 #include "mm/allocator.h"
 #include "mm/pmm.h"
 #include <stddef.h>
 
-typedef struct driver_state {
-        ARC_Resource *transport;
-        nvme_submit_t submit;
-        nvme_poll_t poll;
-
-        struct {
-                size_t max_transfer_size;
-                uint16_t id;
-                uint32_t version;
-                uint32_t type;
-                int ctratt;
-        } ctrl_iden;
-        
-} driver_state_t;
-
-int nvme_create_qpair() {
-        return 0;
-}
-
-int nvme_delete_qpair() {
-        return 0;
-}
-
-int nvme_delete_all_qpairs() {
-        return 0;
-}
-
-int nvme_create_io_qpair() {
-        return 0;
-}
-
-int nvme_setup_io_queues() {
-        return 0;
-}
-
-static int nvme_identify_controller(driver_state_t *state) {
+static int nvme_identify_controller(nvme_driver_state_t *state) {
 	uint8_t *data = (uint8_t *)pmm_fast_page_alloc();
 
 	qs_entry_t cmd = {
@@ -82,13 +49,99 @@ static int nvme_identify_controller(driver_state_t *state) {
 	return 0;
 }
 
+static uint16_t nvme_request_io_queues(nvme_driver_state_t *state, uint16_t qcount) {
+	// Configure IO sub / comp queue sizes
+        ARC_Resource *transport = state->transport;
+        ARC_ControlPacketInstruction _cmd = { .command = NVME_TRANSPORT_CTRL_TO_PROPS };
+        transport->driver->control(transport, &_cmd);
+
+        ctrl_props_t *props = alloc(sizeof(*props));
+
+        if (props == NULL) {
+                return -1;
+        }
+
+        transport->driver->read(props, sizeof(*props), 1, NULL, transport);
+	MASKED_WRITE(props->cc, 6, 16, 0xF);
+	MASKED_WRITE(props->cc, 4, 20, 0xF);
+        transport->driver->write(props, sizeof(*props), 1, NULL, transport);
+        
+        free(props);
+
+        // Request qcount qpairs
+	struct qs_entry cmd = {
+	        .cdw0.opcode = 0x9,
+		.cdw10 = 0x7,
+		.cdw11 = (qcount - 1) | ((qcount - 1) << 16)
+        };
+
+	qs_wrap_t wrap = state->submit(state->transport, NULL, &cmd);
+        qc_entry_t ret = { 0 };
+	state->poll(state->transport, &wrap, &ret);
+
+	return min(MASKED_READ(ret.dw0, 0, 0xFFFF), MASKED_READ(ret.dw0, 16, 0xFFFF));
+}
+
+
+static int nvme_create_io_qpairs(nvme_driver_state_t *state, uint16_t count, size_t qsize) {                
+        nvme_qpair_t *io_qpairs = alloc(sizeof(*io_qpairs) * count);
+        
+        if (io_qpairs == NULL) {
+                ARC_DEBUG(ERR, "Failed to allocate io qpairs\n");
+                free(state);
+                return -1;
+        }
+
+        uint16_t i = 0;
+        for (; i < count; i++) {
+                void *base = pmm_alloc(qsize * 2);
+
+                if (base == NULL) {
+                        ARC_DEBUG(ERR, "Failed to allocate base for io qpair %d\n", i);
+                        break;
+                }
+
+                ARC_Ringbuffer *sub = init_ringbuffer(base, qsize / sizeof(qs_entry_t), sizeof(qs_entry_t));
+                if (sub == NULL) {
+                        ARC_DEBUG(ERR, "Failed to create ringbuffer structure for io qpair %d (submission)\n", i);
+                        break;
+                }
+                
+                ARC_Ringbuffer *cmp = init_ringbuffer(base + qsize, qsize / sizeof(qc_entry_t), sizeof(qc_entry_t));
+
+                if (cmp == NULL) {
+                        ARC_DEBUG(ERR, "Failed to create ringbuffer structure for io qpair %d (completion)\n", i);
+                        break;
+                }
+
+                io_qpairs[i].phase = 0;
+                io_qpairs[i].id = i + 1;
+                io_qpairs[i].subq = sub;
+                io_qpairs[i].cmpq = cmp;
+        }
+
+        if (i != count) {
+                for (int _i = i; _i >= 0; _i--) {
+                        pmm_free(io_qpairs[_i].subq->base);
+                }
+                free(io_qpairs);
+                
+                return -1;
+        }
+
+        state->qpairs.qs = io_qpairs;
+
+        return 0;
+}
+
+
 int init_nvme(ARC_Resource *res, void *arg) {
         if (arg == NULL) {
                 ARC_DEBUG(ERR, "NULL pointer given for transport resource\n");
                 return -1;
         }
         
-        driver_state_t *state = alloc(sizeof(*state));
+        nvme_driver_state_t *state = alloc(sizeof(*state));
 
         if (state == NULL) {
                 ARC_DEBUG(INFO, "Failed to allocate driver state\n");
@@ -97,8 +150,6 @@ int init_nvme(ARC_Resource *res, void *arg) {
 
         memset(state, 0, sizeof(*state));
 
-        res->driver_state = state;
-        
         ARC_DEBUG(INFO, "Initializing general NVME driver with transport=%p\n", arg);
         
         ARC_Resource *transport = arg;
@@ -107,26 +158,47 @@ int init_nvme(ARC_Resource *res, void *arg) {
         nvme_transport_iden_t ident = { 0 };
         ARC_ControlPacketInstruction cmd = { .command = NVME_TRANSPORT_CTRL_IDEN,
                                              .data    = &ident };
-        
-        ARC_ControlPacketResponse *resp = NULL;
-        if (transport->driver->control == NULL ||
-            (resp = transport->driver->control(transport, &cmd)) == NULL) {
-                return -1;
+
+        if (transport->driver->control == NULL) {
+                free(state);
+                return -4;
         }
 
+        ARC_ControlPacketResponse resp = transport->driver->control(transport, &cmd);
+
+        if (resp.data == NULL) {
+                free(state);
+                return -5;
+        }
+
+        
         state->poll = ident.poll;
         state->submit = ident.submit;
-        printf("%p %p\n", state->poll, state->submit);
         
         nvme_identify_controller(state);
-
         
-        // TODO: Take the properties from PCI / fabrics and initialize
-        //       it into controller state
-        // TODO: Further initialize controller
-        // TODO: Enumerate all NVME structures and create files into the
-        //       VFS under /dev/
+        // TODO: Get a list of namespaces
+        uint16_t namespaces = 0;
+        uint16_t requested = namespaces * Arc_ProcessorCounter;
+        uint16_t granted = nvme_request_io_queues(state, requested);
 
+        if (granted == 0) {
+                free(state);
+                return -6;
+        }
+        
+        size_t qsize = 0x1000;
+        if (nvme_create_io_qpairs(state, granted, qsize) != 0) {
+                free(state);
+                return -7;
+        }
+        
+        state->qpairs.requested = requested;
+        state->qpairs.granted = granted;
+        // TODO: Initialize those namespaces
+        
+        res->driver_state = state;
+        
         return 0;
 }
 

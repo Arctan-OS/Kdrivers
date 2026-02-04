@@ -43,6 +43,42 @@ enum {
         NVME_TRANSPORT_TYPE_PCI,
 };
 
+typedef struct ctrl_props {
+	uint64_t cap;
+	uint32_t vs;
+	uint32_t intms;
+	uint32_t intmc;
+	uint32_t cc;
+	uint32_t resv0;
+	uint32_t csts;
+	uint32_t nssr;
+	uint32_t aqa;
+	uint64_t asq;
+	uint64_t acq;
+	uint32_t cmbloc;
+	uint32_t cmbsz;
+	uint32_t bpinfo;
+	uint32_t bprsel;
+	uint64_t bpmbl;
+	uint64_t cmbmsc;
+	uint32_t cmbsts;
+	uint32_t cmbebs;
+	uint32_t cmbswtp;
+	uint32_t nssd;
+	uint32_t crto;
+	uint8_t resv1[0xD94];
+	uint32_t pmrcap;
+	uint32_t pmrctl;
+	uint32_t pmrsts;
+	uint32_t pmrebs;
+	uint32_t pmrswtp;
+	uint32_t pmrmscl;
+	uint32_t pmrmscu;
+	uint8_t resv2[0x1E4];
+	uint8_t data[];
+} __attribute__((packed)) ctrl_props_t;
+STATIC_ASSERT(sizeof(ctrl_props_t) == 0x1000, "Controller properties size mismatch");
+
 typedef struct qs_entry {
 	struct {
 		uint8_t opcode;
@@ -96,7 +132,30 @@ typedef struct qs_wrap {
 } qs_wrap_t;
 
 typedef qs_wrap_t (*nvme_submit_t)(ARC_Resource *, nvme_qpair_t *, qs_entry_t *);
-typedef int (*nvme_poll_t)(ARC_Resource *, qs_wrap_t *, qc_entry_t **);
+typedef int (*nvme_poll_t)(ARC_Resource *, qs_wrap_t *, qc_entry_t *);
+
+// Shared between nvme.c and namespace.c
+typedef struct nvme_driver_state {
+        ARC_Resource *transport;
+        nvme_submit_t submit;
+        nvme_poll_t poll;
+
+        struct {
+                size_t max_transfer_size;
+                uint16_t id;
+                uint32_t version;
+                uint32_t type;
+                int ctratt;
+        } ctrl_iden;
+
+        struct {
+                size_t requested; // Number of queue pairs requested
+                size_t granted;   // Number of queue pairs granted
+                                  // The number of queue pairs per namespace = granted / Arc_ProcessorCounter
+                size_t count;     // Number of qpairs initialized
+                nvme_qpair_t *qs;
+        } qpairs;
+} nvme_driver_state_t;
 
 typedef struct nvme_transport_iden {
         uint8_t type;
