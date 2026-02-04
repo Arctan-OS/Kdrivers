@@ -1,244 +1,371 @@
-/**
- * @file pci.c
- *
- * @author awewsomegamer <awewsomegamer@gmail.com>
- *
- * @LICENSE
- * Arctan-OS/Kernel - Operating System Kernel
- * Copyright (C) 2023-2025 awewsomegamer
- *
- * This file is part of Arctan-OS/Kernel.
- *
- * Arctan is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; version 2
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
- *
- * @DESCRIPTION
-*/
-#include "arch/pager.h"
-#include "arch/pci.h"
-#include "drivers/dri_defs.h"
+#include "arch/info.h"
+#include "arch/x86-64/util.h"
 #include "drivers/sysdev/nvme/nvme.h"
-#include "drivers/sysdev/nvme/pci.h"
-#include "global.h"
-#include "lib/mutex.h"
-#include "lib/util.h"
+#include "drivers/dri_defs.h"
+#include "drivers/resource.h"
 #include "mm/pmm.h"
+#include "mm/allocator.h"
+#include "drivers/sysdev/nvme/nvme.h"
+#include "arch/pager.h"
+#include "lib/ringbuffer.h"
 
-int nvme_pci_submit_command(struct controller_state *state, int queue, struct qs_entry *cmd) {
-	if (state == NULL || cmd == NULL) {
-		return -1;
+#define SQnTDBL(_properties, _n) ((uintptr_t)_properties->data + ((2 * (_n)) * (4 << MASKED_READ(_properties->cap, 32, 0b1111))))
+#define CQnHDBL(_properties, _n) ((uintptr_t)_properties->data + ((2 * (_n) + 1) * (4 << MASKED_READ(_properties->cap, 32, 0b1111))))
+
+typedef struct ctrl_props {
+	uint64_t cap;
+	uint32_t vs;
+	uint32_t intms;
+	uint32_t intmc;
+	uint32_t cc;
+	uint32_t resv0;
+	uint32_t csts;
+	uint32_t nssr;
+	uint32_t aqa;
+	uint64_t asq;
+	uint64_t acq;
+	uint32_t cmbloc;
+	uint32_t cmbsz;
+	uint32_t bpinfo;
+	uint32_t bprsel;
+	uint64_t bpmbl;
+	uint64_t cmbmsc;
+	uint32_t cmbsts;
+	uint32_t cmbebs;
+	uint32_t cmbswtp;
+	uint32_t nssd;
+	uint32_t crto;
+	uint8_t resv1[0xD94];
+	uint32_t pmrcap;
+	uint32_t pmrctl;
+	uint32_t pmrsts;
+	uint32_t pmrebs;
+	uint32_t pmrswtp;
+	uint32_t pmrmscl;
+	uint32_t pmrmscu;
+	uint8_t resv2[0x1E4];
+	uint8_t data[];
+} __attribute__((packed)) ctrl_props_t;
+STATIC_ASSERT(sizeof(ctrl_props_t) == 0x1000, "Controller properties size mismatch");
+
+typedef struct driver_state {
+        ctrl_props_t *props;
+        int exposed;
+        nvme_qpair_t adminq;
+} driver_state_t;
+
+static qs_wrap_t nvme_pci_submit_command(ARC_Resource *transport, nvme_qpair_t *qpair, qs_entry_t *cmd) {
+	if (transport == NULL || cmd == NULL) {
+		return (qs_wrap_t){ 0 };
 	}
 
-	struct qpair_list_entry *qpair = state->admin_entry;
-	if (queue != ADMIN_QUEUE) {
-		qpair = state->list;
-		while (qpair != NULL && qpair->id != queue) {
-			printf("%d\n", qpair->id);
-			qpair = qpair->next;
-		}
-	}
+        bool I = arch_interrupts_enabled();
+        ARC_DISABLE_INTERRUPT;
+        
+        driver_state_t *state = transport->driver_state;
+        bool admin = false;
+        if (qpair == NULL) {
+                qpair = &state->adminq;
+                admin = true;
+        }
 
-	if (qpair == NULL) {
-		return -2;
-	}
+	size_t ptr = ringbuffer_allocate(qpair->subq, 1);
 
-	size_t ptr = ringbuffer_allocate(qpair->submission_queue, 1);
-
-	if (queue == ADMIN_QUEUE) {
+	if (admin) {
 		cmd->cdw0.cid = (1 << 15) | (ptr & 0xFF);
 	} else {
-		cmd->cdw0.cid = (queue & 0x3F) | ((ptr & 0xFF) << 6);
+		cmd->cdw0.cid = (qpair->id & 0x3F) | ((ptr & 0xFF) << 6);
 	}
 
-	ringbuffer_write(qpair->submission_queue, ptr, cmd);
+	ringbuffer_write(qpair->subq, ptr, cmd);
 
-	uint32_t *doorbell = (uint32_t *)SQnTDBL(state->properties, queue + 1);
+	uint32_t *doorbell = (uint32_t *)SQnTDBL(state->props, qpair->id);
 	*doorbell = ((uint32_t)ptr) + 1;
 
-	return 0;
+        if (I) {
+                ARC_ENABLE_INTERRUPT;
+        }
+        
+	return (qs_wrap_t){ .cmd = cmd, .qpair = qpair };
 }
 
-int nvme_pci_poll_completion(struct controller_state *state, struct qs_entry *cmd, struct qc_entry *ret) {
-	if (state == NULL || cmd == NULL) {
+static int nvme_pci_poll_completion(ARC_Resource *transport, qs_wrap_t *wrap, qc_entry_t **ret) {
+	if (transport == NULL || wrap->cmd == NULL) {
 		return -1;
 	}
 
-	struct qpair_list_entry *qpair = state->admin_entry;
-	int qpair_id = (cmd->cdw0.cid >> 15) & 1 ? ADMIN_QUEUE : cmd->cdw0.cid & 0x3F;
-	int cmd_idx = (qpair_id == ADMIN_QUEUE) ? (cmd->cdw0.cid) : (cmd->cdw0.cid >> 6) & 0xFF;
-
-	if (qpair_id != ADMIN_QUEUE) {
-		qpair = state->list;
-		while (qpair != NULL && qpair->id != qpair_id) {
-			qpair = qpair->next;
-		}
-	}
-
-	if (qpair == NULL) {
-		return -2;
-	}
-
-	struct qc_entry *qc = (struct qc_entry *)qpair->completion_queue->base;
-
-	size_t i = qpair->completion_queue->idx;
+        nvme_qpair_t *qpair = wrap->qpair;
+        qs_entry_t *cmd = wrap->cmd;
+	qc_entry_t *qc = (struct qc_entry *)qpair->cmpq->base;
+        
+        bool I = arch_interrupts_enabled();
+        ARC_ENABLE_INTERRUPT; // Causes a double fault, if commented, waits forever
+        
+	size_t i = 0;
 	while (1) {
-		i = qpair->completion_queue->idx;
+		i = qpair->cmpq->idx;
 
 		if (qc[i].phase == qpair->phase && qc[i].cid == cmd->cdw0.cid) {
 			break;
 		}
 	}
 
+        if (!I) {
+                ARC_DISABLE_INTERRUPT;
+        }
+
+        printf("made it here\n");
+        
 	int status = qc[i].status;
 
 	if (ret != NULL) {
-		memcpy(ret, &qc[i], sizeof(*ret));
+		memcpy(ret, &qc[i], sizeof(**ret));
 	}
 
-	size_t idx = ringbuffer_allocate(qpair->completion_queue, 1);
+	size_t idx = ringbuffer_allocate(qpair->cmpq, 1);
 
-	if (idx == qpair->completion_queue->objs - 1) {
+	if (idx == qpair->cmpq->objs - 1) {
 		qpair->phase = !qpair->phase;
 	}
 
-	uint32_t *doorbell = (uint32_t *)CQnHDBL(state->properties, qpair_id + 1);
+        driver_state_t *state = transport->driver_state;
+	uint32_t *doorbell = (uint32_t *)CQnHDBL(state->props, qpair->id);
 	*doorbell = ((uint32_t)idx) + 1;
 
-	ringbuffer_free(qpair->submission_queue, cmd_idx);
+        int cmd_idx = qpair->id ? (cmd->cdw0.cid >> 6) & 0xFF : (cmd->cdw0.cid);
+	ringbuffer_free(qpair->subq, cmd_idx);
 
 	return status;
 }
 
-static int reset_controller(struct controller_state *state) {
-	if (state == NULL || state->properties == NULL) {
-		ARC_DEBUG(ERR, "Failed to reset controller, state or properties NULL\n");
-		return -1;
-	}
-
-	struct controller_properties *properties = state->properties;
-
-	// Disable
-	MASKED_WRITE(properties->cc, 0, 0, 1);
-
-	while (MASKED_READ(properties->csts, 0, 1));
-
-	// Create adminstrator queue
-	void *queues = pmm_alloc(PAGE_SIZE * 2);
+static int create_admin_queues(driver_state_t *state, size_t qsize) {
+	void *queues = pmm_alloc(qsize * 2);
 
 	if (queues == NULL) {
 		ARC_DEBUG(ERR, "Failed to allocate adminstrator queues\n");
 		return -1;
 	}
 
-	nvme_delete_all_qpairs(state);
+        ARC_Ringbuffer *sub = init_ringbuffer(queues, NVME_ADMIN_QUEUE_SUB_LEN, sizeof(qs_entry_t));
 
-	if (MASKED_READ(state->flags, 0, 1)) {
-		// TODO: Uninitialize stuff
-	}
+        if (sub == NULL) {
+                return -2;
+        }
+        
+        ARC_Ringbuffer *comp = init_ringbuffer(queues, NVME_ADMIN_QUEUE_SUB_LEN, sizeof(qs_entry_t));
 
+        if (comp == NULL) {
+                // TODO: Delete ringbuffer
+                return -3;
+        }
+
+        state->adminq.id = 0;
+        state->adminq.cmpq = comp;
+        state->adminq.subq = sub;
+
+        ctrl_props_t *props = state->props;
+        
 	memset(queues, 0, PAGE_SIZE * 2);
-	properties->asq = ARC_HHDM_TO_PHYS(queues);
-	properties->acq = ARC_HHDM_TO_PHYS(queues) + PAGE_SIZE;
+	props->asq = ARC_HHDM_TO_PHYS(queues);
+	props->acq = ARC_HHDM_TO_PHYS(queues) + qsize;
 
-	MASKED_WRITE(properties->aqa, ADMIN_QUEUE_SUB_LEN - 1, 0, 0xFFF);
-	MASKED_WRITE(properties->aqa, ADMIN_QUEUE_COMP_LEN - 1, 16, 0xFFF);
+	MASKED_WRITE(props->aqa, NVME_ADMIN_QUEUE_SUB_LEN - 1, 0, 0xFFF);
+	MASKED_WRITE(props->aqa, NVME_ADMIN_QUEUE_COMP_LEN - 1, 16, 0xFFF);
+        
+        return 0;
+}
 
-	state->admin_entry = nvme_create_qpair(state, ARC_PHYS_TO_HHDM(properties->asq), ADMIN_QUEUE_SUB_LEN, ARC_PHYS_TO_HHDM(properties->acq), ADMIN_QUEUE_SUB_LEN);
-
-	if (state->admin_entry == NULL) {
-		ARC_DEBUG(ERR, "Failed to create adminstrator queue pair\n");
-		return -2;
+static int reset_controller(driver_state_t *state) {
+        if (state == NULL) {
+		ARC_DEBUG(ERR, "Failed to reset controller, state or properties NULL\n");
+		return -1;
 	}
 
-	// Clear bitmap, as admin queue is not part of IO queues
-	state->id_bmp = -1;
-	state->admin_entry->id = -1;
+        ctrl_props_t *props = state->props;
 
+	// Disable
+	MASKED_WRITE(props->cc, 0, 0, 1);
+
+        // TODO: Portability?
+        // TODO: A timeout?
+	while (MASKED_READ(props->csts, 0, 1)) __builtin_ia32_pause();
+
+        if (create_admin_queues(state, PAGE_SIZE) != 0) {
+                return -2;
+        }
+        
 	// Set CC.CSS
-	uint8_t cap_css = MASKED_READ(properties->cap, 37, 0xFF);
+	uint8_t cap_css = MASKED_READ(props->cap, 37, 0xFF);
 
 	if ((cap_css >> 7) & 1) {
-		MASKED_WRITE(properties->cc, 0b111, 4, 0b111);
+		MASKED_WRITE(props->cc, 0b111, 4, 0b111);
 	}
 
 	if ((cap_css >> 6) & 1) {
-		MASKED_WRITE(properties->cc, 0b110, 4, 0b111);
+		MASKED_WRITE(props->cc, 0b110, 4, 0b111);
 	}
 
 	if (((cap_css >> 6) & 1) == 0 && ((cap_css >> 0) & 1) == 1) {
-		MASKED_WRITE(properties->cc, 0b000, 4, 0b111);
+		MASKED_WRITE(props->cc, 0b000, 4, 0b111);
 	}
 
 	// Set MPS and AMS
-	MASKED_WRITE(properties->cc, 0, 7, 0b1111);
-	MASKED_WRITE(properties->cc, 0, 11, 0b111);
+	MASKED_WRITE(props->cc, 0, 7, 0b1111);
+	MASKED_WRITE(props->cc, 0, 11, 0b111);
 
 	// Enable
-	MASKED_WRITE(properties->cc, 1, 0, 1);
-
-	// TODO: Add something to do here like __asm__("pause")
-	while (!MASKED_READ(properties->csts, 0, 1));
-
-	state->flags |= 1;
+	MASKED_WRITE(props->cc, 1, 0, 1);
+        
+        // TODO: Portability?
+        // TODO: A timeout?
+	while (!MASKED_READ(props->csts, 0, 1)) __builtin_ia32_pause();
 
 	return 0;
 }
 
-int init_nvme_pci(struct controller_state *state, struct ARC_PCIHeaderMeta *meta) {
-	if (state == NULL || meta == NULL) {
-		return -1;
-	}
+static int uninit_nvme_pci(ARC_Resource *);
+int init_nvme_pci(ARC_Resource *res, void *arg) {
+        driver_state_t *state = alloc(sizeof(*state));
 
-	uint64_t mem_registers_base = 0;
+        if (state == NULL) {
+                ARC_DEBUG(ERR, "Failed to allocate state\n");
+                return -1;
+        }
+
+        res->driver_state = state;
+        
+        uint64_t mem_registers_base = 0;
 	uint64_t idx_data_pair_base = 0;
 	(void)idx_data_pair_base;
 
+        ARC_PCIHeaderMeta *meta = arg;
 	switch (meta->header->common.header_type) {
-		case ARC_PCI_HEADER_DEVICE: {
-			struct ARC_PCIHdrDevice header = meta->header->s.device;
+        case ARC_PCI_HEADER_DEVICE: {
+                ARC_DEBUG(INFO, "PCI header type: device\n");
+                
+                ARC_PCIHdrDevice header = meta->header->s.device;
+                                
+                if (ARC_BAR_IS_IOSPACE(header.bar2)) {
+                        idx_data_pair_base = header.bar2 & ~0b111;
+                        ARC_DEBUG(INFO, "BAR is in IO-space=0x%x\n", idx_data_pair_base);
+                } else {
+                        mem_registers_base = header.bar0 & ~0x3FFF;
+                        mem_registers_base |= (uint64_t)header.bar1 << 32;
 
-			mem_registers_base = header.bar0 & ~0x3FFF;
-			mem_registers_base |= (uint64_t)header.bar1 << 32;
+                        size_t size =  0x2000;
+                        uint32_t attrs = 1 << ARC_PAGER_4K | 1 << ARC_PAGER_NX | 1 << ARC_PAGER_RW | ARC_PAGER_PAT_UC;
+                        if (pager_map(NULL, mem_registers_base, mem_registers_base, size, attrs) != 0) {
+                                ARC_DEBUG(ERR, "Failed to map register space\n");
+                                return -1;
+                        }
 
-			if (ARC_BAR_IS_IOSPACE(header.bar2)) {
-				idx_data_pair_base = header.bar2 & ~0b111;
-			}
-
-			break;
+                        state->props = (void *)mem_registers_base;
+                        ARC_DEBUG(INFO, "BAR is MMapped=%p\n", state->props);
+                }
+                
+                break;
 		}
-		case 1: {
-			break;
-		}
+        default:
+                ARC_DEBUG(ERR, "Unhandled header type %d\n", meta->header->common.header_type);
+                break;
 	}
+	
+	reset_controller(state);
 
-	struct controller_properties *properties = (struct controller_properties *)ARC_PHYS_TO_HHDM(mem_registers_base);
+        ARC_Resource *nvme = init_resource(ARC_DRIGRP_DEV, ARC_DRIDEF_DEV_NVME, res);
 
-	if (properties == NULL) {
-		ARC_DEBUG(ERR, "NVMe properties are NULL\n");
-		return -1;
+        if (nvme == NULL) {
+                uninit_nvme_pci(res);
+                return -2;
+        }
+        
+	return 0;
+}
+
+int uninit_nvme_pci(ARC_Resource *resource) {
+        (void)resource;
+        ARC_DEBUG(WARN, "Uninitializing NVME-PCI\n");
+        
+	return 0;
+}
+
+// TODO: These should probably just write out to the state->props
+static size_t read_nvme_pci(void *buffer, size_t size, size_t count, ARC_File *file, ARC_Resource *res) {
+	if (buffer == NULL || size == 0 || count == 0 || file == NULL || res == NULL) {
+		return 0;
 	}
+        
+	return 1;
+}
 
-	if (pager_map(NULL, ARC_PHYS_TO_HHDM(mem_registers_base), mem_registers_base, 0x2000, 1 << ARC_PAGER_4K | 1 << ARC_PAGER_NX | 1 << ARC_PAGER_RW | ARC_PAGER_PAT_UC) != 0) {
-		ARC_DEBUG(ERR, "Failed to map register space\n");
-		return -1;
+static size_t write_nvme_pci(void *buffer, size_t size, size_t count, ARC_File *file, ARC_Resource *res) {
+	if (buffer == NULL || size == 0 || count == 0 || file == NULL || res == NULL) {
+		return 0;
 	}
-
-	init_static_mutex(&state->qpair_lock);
-
-	state->properties = properties;
-
-	// XXX: There is a triple fault occurring in this function
-	// reset_controller(state);
 
 	return 0;
 }
+
+static int stat_nvme_pci(ARC_Resource *res, char *filename, struct stat *stat) {
+	(void)res;
+	(void)filename;
+	(void)stat;
+
+	return 0;
+}
+
+static ARC_ControlPacketResponse *control_nvme_pci(ARC_Resource *res, ARC_ControlPacketInstruction *inst) {
+        if (res == NULL || inst == NULL) {
+                return NULL;
+        }
+
+        ARC_ControlPacketResponse *resp = alloc(sizeof(*resp));
+
+        if (resp == NULL) {
+                return NULL;
+        }
+
+        memset(resp, 0, sizeof(*resp));
+        
+        switch (inst->command) {
+        case NVME_TRANSPORT_CTRL_IDEN: {
+                nvme_transport_iden_t *iden = inst->data;
+
+                if (iden == NULL) {
+                        goto err;
+                }
+                
+                iden->submit = nvme_pci_submit_command;
+                iden->poll = nvme_pci_poll_completion;
+                iden->type = NVME_TRANSPORT_TYPE_PCI;
+
+                resp->type = inst->command;
+                resp->data = iden;
+                resp->size = sizeof(*iden);
+                
+                return resp;
+        }
+        }
+
+ err:
+        free(resp);
+        ARC_DEBUG(ERR, "Unhandled command %d\n", inst->command);
+        return NULL;
+}
+
+static uint64_t pci_codes[] = {
+        0x1b360010,
+        ARC_DRIDEF_CODES_TERMINATOR
+};
+
+ARC_REGISTER_DRIVER(ARC_DRIGRP_DEV_PCI, nvme) = {
+        .init = init_nvme_pci,
+	.uninit = uninit_nvme_pci,
+	.read = read_nvme_pci,
+	.write = write_nvme_pci,
+	.seek = dridefs_int_func_empty,
+	.rename = dridefs_int_func_empty,
+	.stat = stat_nvme_pci,
+        .control = control_nvme_pci,
+	.codes = pci_codes
+};
