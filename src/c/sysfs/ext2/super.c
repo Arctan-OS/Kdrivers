@@ -29,6 +29,7 @@
 #include "drivers/cntrl_defs.h"
 #include "drivers/dri_defs.h"
 #include "drivers/sysfs/ext2/super.h"
+#include "drivers/resource.h"
 #include "drivers/sysfs/ext2/util.h"
 #include "fs/vfs.h"
 #include "global.h"
@@ -356,7 +357,8 @@ static int remove_ext2_super(struct ARC_Resource *res, char *name) {
 	return 0;
 }
 
-static void *control_ext2_super(struct ARC_Resource *res, void *command, size_t len) {
+static ARC_ControlPacketResponse *control_ext2_super(struct ARC_Resource *res, ARC_ControlPacketInstruction *inst) {
+        /*
 	if (res == NULL || command == NULL || len == 0) {
 		return NULL;
 	}
@@ -419,7 +421,8 @@ static void *control_ext2_super(struct ARC_Resource *res, void *command, size_t 
 			//            DATA: NEW_PROPERTIES
 		}
 	}
-
+        */
+        
 	return NULL;
 }
 
