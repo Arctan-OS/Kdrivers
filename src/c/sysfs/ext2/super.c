@@ -357,7 +357,7 @@ static int remove_ext2_super(struct ARC_Resource *res, char *name) {
 	return 0;
 }
 
-static ARC_ControlPacketResponse *control_ext2_super(struct ARC_Resource *res, ARC_ControlPacketInstruction *inst) {
+static ARC_ControlPacketResponse control_ext2_super(struct ARC_Resource *res, ARC_ControlPacketInstruction *inst) {
         /*
 	if (res == NULL || command == NULL || len == 0) {
 		return NULL;
@@ -423,7 +423,7 @@ static ARC_ControlPacketResponse *control_ext2_super(struct ARC_Resource *res, A
 	}
         */
         
-	return NULL;
+	return (ARC_ControlPacketResponse) { 0 };
 }
 
 struct ext2_inode *ext2_read_inode(struct ext2_super_driver_state *state, uint64_t inode) {
