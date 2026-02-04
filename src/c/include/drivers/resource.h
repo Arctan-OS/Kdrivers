@@ -63,6 +63,18 @@ typedef struct ARC_File {
 	ARC_GraphNode *node;
 } ARC_File;
 
+typedef struct ARC_ControlPacketInstruction {
+        uint32_t command;
+        size_t size;
+        void *data;
+} ARC_ControlPacketInstruction;
+
+typedef struct ARC_ControlPacketResponse {
+        uint32_t type;
+        size_t size;
+        void *data;
+} ARC_ControlPacketResponse;
+
 // NOTE: No function pointer in a driver definition
 //       should be NULL.
 typedef struct ARC_DriverDef {
@@ -73,10 +85,10 @@ typedef struct ARC_DriverDef {
 	int    (*seek)   (ARC_File *file, ARC_Resource *res);
 	int    (*rename) (char *from, char *to, ARC_Resource *res);
 	int    (*stat)   (ARC_Resource *res, char *path, struct stat *stat);
-	void  *(*control)(ARC_Resource *res, void *buffer, size_t size);
 	int    (*create) (ARC_Resource *res, char *path, uint32_t mode, int type);
 	int    (*remove) (ARC_Resource *res, char *path);
 	void  *(*locate) (ARC_Resource *res, char *path);
+        ARC_ControlPacketResponse *(*control)(ARC_Resource *res, ARC_ControlPacketInstruction *);
 	uint64_t *codes; // Terminate with ARC_DRIDEF_CODES_TERMINATOR
 } ARC_DriverDef;
 
