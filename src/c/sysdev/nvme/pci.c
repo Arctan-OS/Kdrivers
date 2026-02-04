@@ -78,10 +78,10 @@ static qs_wrap_t nvme_pci_submit_command(ARC_Resource *transport, nvme_qpair_t *
 	}
 
 	ringbuffer_write(qpair->subq, ptr, cmd);
-
+        
 	uint32_t *doorbell = (uint32_t *)SQnTDBL(state->props, qpair->id);
 	*doorbell = ((uint32_t)ptr) + 1;
-
+        
         if (I) {
                 ARC_ENABLE_INTERRUPT;
         }
@@ -99,7 +99,7 @@ static int nvme_pci_poll_completion(ARC_Resource *transport, qs_wrap_t *wrap, qc
 	qc_entry_t *qc = (struct qc_entry *)qpair->cmpq->base;
         
         bool I = arch_interrupts_enabled();
-        ARC_ENABLE_INTERRUPT; // Causes a double fault, if commented, waits forever
+        //ARC_ENABLE_INTERRUPT; // Causes a double fault, if commented, waits forever
         
 	size_t i = 0;
 	while (1) {
@@ -113,8 +113,6 @@ static int nvme_pci_poll_completion(ARC_Resource *transport, qs_wrap_t *wrap, qc
         if (!I) {
                 ARC_DISABLE_INTERRUPT;
         }
-
-        printf("made it here\n");
         
 	int status = qc[i].status;
 
@@ -149,12 +147,14 @@ static int create_admin_queues(driver_state_t *state, size_t qsize) {
         ARC_Ringbuffer *sub = init_ringbuffer(queues, NVME_ADMIN_QUEUE_SUB_LEN, sizeof(qs_entry_t));
 
         if (sub == NULL) {
+                ARC_DEBUG(ERR, "Failed to create ringbuffer for submission queue\n");
                 return -2;
         }
         
-        ARC_Ringbuffer *comp = init_ringbuffer(queues, NVME_ADMIN_QUEUE_SUB_LEN, sizeof(qs_entry_t));
+        ARC_Ringbuffer *comp = init_ringbuffer(queues + qsize, NVME_ADMIN_QUEUE_SUB_LEN, sizeof(qs_entry_t));
 
         if (comp == NULL) {
+                ARC_DEBUG(ERR, "Failed to create ringbuffer for completion queue\n");
                 // TODO: Delete ringbuffer
                 return -3;
         }
@@ -182,14 +182,14 @@ static int reset_controller(driver_state_t *state) {
 	}
 
         ctrl_props_t *props = state->props;
-
+        
 	// Disable
 	MASKED_WRITE(props->cc, 0, 0, 1);
 
         // TODO: Portability?
         // TODO: A timeout?
 	while (MASKED_READ(props->csts, 0, 1)) __builtin_ia32_pause();
-
+        
         if (create_admin_queues(state, PAGE_SIZE) != 0) {
                 return -2;
         }
@@ -212,14 +212,14 @@ static int reset_controller(driver_state_t *state) {
 	// Set MPS and AMS
 	MASKED_WRITE(props->cc, 0, 7, 0b1111);
 	MASKED_WRITE(props->cc, 0, 11, 0b111);
-
+        
 	// Enable
 	MASKED_WRITE(props->cc, 1, 0, 1);
-        
+
         // TODO: Portability?
         // TODO: A timeout?
 	while (!MASKED_READ(props->csts, 0, 1)) __builtin_ia32_pause();
-
+        
 	return 0;
 }
 
