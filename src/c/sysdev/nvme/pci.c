@@ -3,11 +3,13 @@
 #include "drivers/sysdev/nvme/nvme.h"
 #include "drivers/dri_defs.h"
 #include "drivers/resource.h"
+#include "lib/atomics.h"
 #include "mm/pmm.h"
 #include "mm/allocator.h"
 #include "drivers/sysdev/nvme/nvme.h"
 #include "arch/pager.h"
 #include "lib/ringbuffer.h"
+#include "lib/util.h"
 
 #define SQnTDBL(_properties, _n) ((uintptr_t)_properties->data + ((2 * (_n)) * (4 << MASKED_READ(_properties->cap, 32, 0b1111))))
 #define CQnHDBL(_properties, _n) ((uintptr_t)_properties->data + ((2 * (_n) + 1) * (4 << MASKED_READ(_properties->cap, 32, 0b1111))))
@@ -18,6 +20,7 @@ typedef struct driver_state {
         nvme_qpair_t adminq;
 } driver_state_t;
 
+// TODO: Atomic analysis
 static qs_wrap_t nvme_pci_submit_command(ARC_Resource *transport, nvme_qpair_t *qpair, qs_entry_t *cmd) {
 	if (transport == NULL || cmd == NULL) {
 		return (qs_wrap_t){ 0 };
@@ -28,6 +31,7 @@ static qs_wrap_t nvme_pci_submit_command(ARC_Resource *transport, nvme_qpair_t *
         
         driver_state_t *state = transport->driver_state;
         bool admin = false;
+        
         if (qpair == NULL) {
                 qpair = &state->adminq;
                 admin = true;
@@ -44,7 +48,7 @@ static qs_wrap_t nvme_pci_submit_command(ARC_Resource *transport, nvme_qpair_t *
 	ringbuffer_write(qpair->subq, ptr, cmd);
         
 	uint32_t *doorbell = (uint32_t *)SQnTDBL(state->props, qpair->id);
-	*doorbell = ((uint32_t)ptr) + 1;
+	*doorbell = ((uint32_t)ptr + 1) % qpair->subq->objs;
         
         if (I) {
                 ARC_ENABLE_INTERRUPT;
@@ -53,11 +57,12 @@ static qs_wrap_t nvme_pci_submit_command(ARC_Resource *transport, nvme_qpair_t *
 	return (qs_wrap_t){ .cmd = cmd, .qpair = qpair };
 }
 
+// TODO: Atomic analysis
 static int nvme_pci_poll_completion(ARC_Resource *transport, qs_wrap_t *wrap, qc_entry_t *ret) {
 	if (transport == NULL || wrap->cmd == NULL) {
 		return -1;
 	}
-
+        
         nvme_qpair_t *qpair = wrap->qpair;
         qs_entry_t *cmd = wrap->cmd;
 	qc_entry_t *qc = (struct qc_entry *)qpair->cmpq->base;
@@ -66,14 +71,18 @@ static int nvme_pci_poll_completion(ARC_Resource *transport, qs_wrap_t *wrap, qc
         //ARC_ENABLE_INTERRUPT; // Causes a double fault
         
 	size_t i = 0;
-	while (1) {
+        /*
+        do {
 		i = qpair->cmpq->idx;
-
-		if (qc[i].phase == qpair->phase && qc[i].cid == cmd->cdw0.cid) {
-			break;
-		}
-	}
-
+	} while (qc[i].phase != qpair->phase && qc[i].cid != cmd->cdw0.cid);
+        */
+        while (1) {
+                i = qpair->cmpq->idx;
+                if (qc[i].phase != qpair->phase && qc[i].cid != cmd->cdw0.cid) {
+                        break;
+                }
+        }
+        
         if (!I) {
                 ARC_DISABLE_INTERRUPT;
         }
@@ -92,8 +101,12 @@ static int nvme_pci_poll_completion(ARC_Resource *transport, qs_wrap_t *wrap, qc
 
         driver_state_t *state = transport->driver_state;
 	uint32_t *doorbell = (uint32_t *)CQnHDBL(state->props, qpair->id);
-	*doorbell = ((uint32_t)idx) + 1;
+	*doorbell = ((uint32_t)idx + 1) % qpair->cmpq->objs;
 
+        if (idx + 1 >= qpair->cmpq->objs) {
+                qpair->phase = !qpair->phase;
+        }
+        
         int cmd_idx = qpair->id ? (cmd->cdw0.cid >> 6) & 0xFF : (cmd->cdw0.cid);
 	ringbuffer_free(qpair->subq, cmd_idx);
 
@@ -107,6 +120,8 @@ static int create_admin_qpair(driver_state_t *state, size_t qsize) {
 		ARC_DEBUG(ERR, "Failed to allocate adminstrator queues\n");
 		return -1;
 	}
+        
+        //memset(queues, 0, qsize * 2);
 
         ARC_Ringbuffer *sub = init_ringbuffer(queues, NVME_ADMIN_QUEUE_SUB_LEN, sizeof(qs_entry_t));
 
@@ -115,7 +130,7 @@ static int create_admin_qpair(driver_state_t *state, size_t qsize) {
                 return -2;
         }
         
-        ARC_Ringbuffer *comp = init_ringbuffer(queues + qsize, NVME_ADMIN_QUEUE_SUB_LEN, sizeof(qs_entry_t));
+        ARC_Ringbuffer *comp = init_ringbuffer(queues + qsize, NVME_ADMIN_QUEUE_COMP_LEN, sizeof(qc_entry_t));
 
         if (comp == NULL) {
                 ARC_DEBUG(ERR, "Failed to create ringbuffer for completion queue\n");
@@ -124,6 +139,7 @@ static int create_admin_qpair(driver_state_t *state, size_t qsize) {
         }
 
         state->adminq.id = 0;
+        state->adminq.phase = 1;
         state->adminq.cmpq = comp;
         state->adminq.subq = sub;
 
@@ -183,7 +199,7 @@ static int reset_controller(driver_state_t *state) {
         // TODO: Portability?
         // TODO: A timeout?
 	while (!MASKED_READ(props->csts, 0, 1)) __builtin_ia32_pause();
-        
+
 	return 0;
 }
 
@@ -239,6 +255,9 @@ int init_nvme_pci(ARC_Resource *res, void *arg) {
                 return -4;
         }
 
+        MASKED_WRITE(state->props->cc, 6, 16, 0xF);
+	MASKED_WRITE(state->props->cc, 4, 20, 0xF);
+        
         res->driver_state = state;
         
         ARC_Resource *nvme = init_resource(ARC_DRIGRP_DEV, ARC_DRIDEF_DEV_NVME, res);
@@ -264,7 +283,14 @@ static size_t read_nvme_pci(void *buffer, size_t size, size_t count, ARC_File *f
 		return 0;
 	}
 
-        ARC_DEBUG(WARN, "Need to implement reading for properties\n");
+        driver_state_t *state = res->driver_state;
+        
+        switch (state->exposed) {
+        case NVME_TRANSPORT_CTRL_TO_PROPS: {
+                memcpy(buffer, state->props, sizeof(*state->props));
+                return size;
+        }
+        }
         
 	return 0;
 }
@@ -274,7 +300,14 @@ static size_t write_nvme_pci(void *buffer, size_t size, size_t count, ARC_File *
 		return 0;
 	}
 
-        ARC_DEBUG(WARN, "Need to implement writing for properties\n");
+        driver_state_t *state = res->driver_state;
+        
+        switch (state->exposed) {
+        case NVME_TRANSPORT_CTRL_TO_PROPS: {
+                memcpy(state->props, buffer, sizeof(*state->props));
+                return size;
+        }
+        }
         
 	return 0;
 }

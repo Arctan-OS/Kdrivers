@@ -123,7 +123,7 @@ typedef struct nvme_qpair {
         ARC_Ringbuffer *subq;
         ARC_Ringbuffer *cmpq;
         int id;
-        int phase;
+        int phase; // The expected value of the phase bit for a new entry
 } nvme_qpair_t;
 
 typedef struct qs_wrap {
@@ -149,10 +149,10 @@ typedef struct nvme_driver_state {
         } ctrl_iden;
 
         struct {
-                size_t requested; // Number of queue pairs requested
-                size_t granted;   // Number of queue pairs granted
-                                  // The number of queue pairs per namespace = granted / Arc_ProcessorCounter
-                size_t count;     // Number of qpairs initialized
+                size_t requested; // Number of qpairs requested
+                size_t granted;   // Number of qpairs granted
+                                  // Number of qpairs per namespace = Arc_ProcessorCounter
+                size_t init;      // Number of qpairs initialized
                 nvme_qpair_t *qs;
         } qpairs;
 } nvme_driver_state_t;
@@ -162,5 +162,11 @@ typedef struct nvme_transport_iden {
         nvme_submit_t submit;
         nvme_poll_t poll;
 } nvme_transport_iden_t;
+
+typedef struct nvme_namespace_args {
+        nvme_driver_state_t *state;
+	int namespace;
+	int command_set;
+} nvme_namespace_args_t;
 
 #endif
