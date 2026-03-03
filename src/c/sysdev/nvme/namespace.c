@@ -29,6 +29,8 @@ typedef struct driver_state {
         int command_set;
         int qpair_base;
         int qpair_count;
+
+        ARC_Cache *l2;
 } driver_state_t;
 
 static int nvme_register_io_qpair(nvme_driver_state_t *state, nvme_qpair_t *qpair, uint8_t nvm_set, int irq) {
@@ -44,13 +46,12 @@ static int nvme_register_io_qpair(nvme_driver_state_t *state, nvme_qpair_t *qpai
 		.cdw11 = 1 | ((irq > 31) << 1) | ((irq & 0xFFFF) << 16),
 		.cdw12 = nvm_set
         };
-        qc_entry_t cmp = { 0 };
         
         qs_wrap_t wrap = state->submit(state->transport, NULL, &cmd);
-	state->poll(state->transport, &wrap, &cmp);
-        
-        if (cmp.status != 0) {
-                return cmp.status | (1 << 16);
+
+        int status = state->poll(state->transport, &wrap, NULL);
+        if (status != 0) {
+                return status | (1 << 16);
         }
         
 	cmd.cdw0.opcode = 0x1;
@@ -59,14 +60,15 @@ static int nvme_register_io_qpair(nvme_driver_state_t *state, nvme_qpair_t *qpai
 	cmd.cdw11 = 1 | (qpair->id << 16);
         
         wrap = state->submit(state->transport, NULL, &cmd);
-	state->poll(state->transport, &wrap, &cmp);
+	status = state->poll(state->transport, &wrap, NULL);
         
-        if (cmp.status != 0) {
-                return cmp.status | (2 << 16);
+        if (status != 0) {
+                return status | (2 << 16);
         }
         
         return 0;
 }
+
 
 static int namespace_get_info(driver_state_t *state) {
         nvme_driver_state_t *nvm_state = state->nvm_state;
@@ -85,13 +87,12 @@ static int namespace_get_info(driver_state_t *state) {
                 .cdw11 = (state->command_set & 0xFF) << 24,
                 .nsid = state->namespace
         };
-        qc_entry_t cmp = { 0 };
         
         qs_wrap_t wrap = nvm_state->submit(nvm_state->transport, NULL, &cmd);
-        nvm_state->poll(nvm_state->transport, &wrap, &cmp);
+        int status = nvm_state->poll(nvm_state->transport, &wrap, NULL);
 
-        if (cmp.status != 0) {
-                return cmp.status | (1 << 16);
+        if (status != 0) {
+                return status | (1 << 16);
         }
         
         uint8_t format_idx = MASKED_READ(data[26], 0, 0xF) | (MASKED_READ(data[26], 5, 0b11) << 4);
@@ -110,27 +111,27 @@ static int namespace_get_info(driver_state_t *state) {
 
         cmd.cdw10 = 0x5;
         wrap = nvm_state->submit(nvm_state->transport, NULL, &cmd);
-        nvm_state->poll(nvm_state->transport, &wrap, &cmp);
+        status = nvm_state->poll(nvm_state->transport, &wrap, NULL);
 
-        if (cmp.status != 0) {
-                return cmp.status | (2 << 16);
+        if (status != 0) {
+                return status | (2 << 16);
         }
         
         cmd.cdw10 = 0x6;
         wrap = nvm_state->submit(nvm_state->transport, NULL, &cmd);
-        nvm_state->poll(nvm_state->transport, &wrap, &cmp);
+        status = nvm_state->poll(nvm_state->transport, &wrap, NULL);
 
-        if (cmp.status != 0) {
-                return cmp.status | (3 << 16);
+        if (status != 0) {
+                return status | (3 << 16);
         }
         
         cmd.cdw10 = 0x8;
         cmd.cdw11 = 0x0;
         wrap = nvm_state->submit(nvm_state->transport, NULL, &cmd);
-        nvm_state->poll(nvm_state->transport, &wrap, &cmp);
+        status = nvm_state->poll(nvm_state->transport, &wrap, NULL);
 
-        if (cmp.status != 0) {
-                return cmp.status | (4 << 16);
+        if (status != 0) {
+                return status | (4 << 16);
         }
         
         return 0;
@@ -194,7 +195,7 @@ static int namespace_rw_page(bool write, driver_state_t *state, uint64_t bstart,
                 *data = pmm_alloc(state->block_size);
                 memset(*data, 0, PAGE_SIZE);        
         }
-
+        
         // TODO: Attempt to read/write cache
         
         void *meta = pmm_fast_page_alloc();
@@ -215,12 +216,11 @@ static int namespace_rw_page(bool write, driver_state_t *state, uint64_t bstart,
         
         nvme_driver_state_t *nvm_state = state->nvm_state;
         qs_wrap_t wrap = nvm_state->submit(nvm_state->transport, qpair, &cmd);
-        qc_entry_t cmp = { 0 };
-        nvm_state->poll(nvm_state->transport, &wrap, &cmp);
+        int status = nvm_state->poll(nvm_state->transport, &wrap, NULL);
         
         pmm_fast_page_free(meta);
         
-        return cmp.status;
+        return status;
 }
 
 static size_t read_nvme_namespace(void *buffer, size_t size, size_t count, ARC_File *file, ARC_Resource *res) {
@@ -231,10 +231,12 @@ static size_t read_nvme_namespace(void *buffer, size_t size, size_t count, ARC_F
         
         while (read < size * count) {
                 size_t read_offset = ALIGN_DOWN(file->offset + read, state->lba_size);
+                size_t page_offset = read + file->offset - read_offset;
                 size_t to_read = min(state->block_size, (size * count) - read);
-
-                if (read_offset - file->offset > 0) {
+                
+                if (page_offset > 0) {
                         to_read = state->block_size - (file->offset - read_offset);
+                        to_read = min(to_read, size * count);
                 }
                 
                 int lba =  read_offset / state->lba_size;
@@ -244,8 +246,8 @@ static size_t read_nvme_namespace(void *buffer, size_t size, size_t count, ARC_F
                         break;
                 }
                 
-                memcpy(buffer + read, page + read + file->offset, to_read);
-                       
+                memcpy(buffer + read, page + page_offset, to_read);
+
                 read += to_read;
         }
 
@@ -256,43 +258,56 @@ static size_t read_nvme_namespace(void *buffer, size_t size, size_t count, ARC_F
 
 static size_t write_nvme_namespace(void *buffer, size_t size, size_t count, ARC_File *file, ARC_Resource *res) {
         driver_state_t *state = res->driver_state;
-
+        
         size_t written = 0;
         void *page = NULL;
-        
+
         while (written < size * count) {
                 size_t write_offset = ALIGN_DOWN(file->offset + written, state->lba_size);
-                size_t page_offset = file->offset - write_offset;
+                size_t page_offset = written + file->offset - write_offset;
                 size_t to_write = min(state->block_size, (size * count) - written);
-
+                
                 if (page_offset > 0) {
                         to_write = state->block_size - (file->offset - write_offset);
+                        to_write = min(to_write, size * count);
                 }
-
-                int lba =  write_offset / state->lba_size;
                 
+                int lba =  write_offset / state->lba_size;
+
                 if (to_write < PAGE_SIZE && namespace_rw_page(false, state, lba, &page) != 0) {
                         ARC_DEBUG(ERR, "Failed to read lba=%d for %lu bytes\n", lba, to_write);
                         break;
                 }
                 
-                memcpy(page + page_offset, buffer + written + page_offset, to_write);
-
+                memcpy(page + page_offset, buffer + written, to_write);
+                
                 if (namespace_rw_page(true, state, lba, &page) != 0) {
                         ARC_DEBUG(ERR, "Failed to write lba=%d for %lu bytes\n", lba, to_write);
                         break;
                 }
+                
+                written += to_write;
         }
 
         pmm_free(page);
         
-        return 0;
+        return written;
 }
 
 static int stat_nvme_namespace(ARC_Resource *res, char *filename, struct stat *stat) {
 	(void)res;
 	(void)filename;
 	(void)stat;
+
+        if (res == NULL || stat == NULL) {
+                return -1;
+        }
+
+        driver_state_t *state = res->driver_state;
+
+        stat->st_blksize = state->lba_size;
+        stat->st_size = state->nsze;
+        
         return 0;
 }
 
