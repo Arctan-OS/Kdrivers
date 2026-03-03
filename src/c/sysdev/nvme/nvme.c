@@ -87,7 +87,7 @@ static int nvme_create_io_qpairs(nvme_driver_state_t *state, uint16_t count, siz
                         break;
                 }
 
-                //memset(base, 0, qsize * 2);
+                memset(base, 0, qsize * 2);
                 
                 ARC_Ringbuffer *sub = init_ringbuffer(base, qsize / sizeof(qs_entry_t), sizeof(qs_entry_t));
                 if (sub == NULL) {
