@@ -33,6 +33,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "lib/cache/base.h"
 
 #define ARC_REGISTER_DRIVER(group, name) \
 	ARC_DriverDef _driver_##name##_##group
@@ -51,16 +52,17 @@ enum ARC_DRI_GROUP {
 ARC_SHARE_DRIVER_INDICES(ARC_DRIGRP_FS_SUPER, ARC_DRIGRP_FS_DIR, ARC_DRIGRP_FS_FILE)
 
 typedef struct ARC_Resource {
-	uint64_t id;
-	uint64_t dri_index;
 	const struct ARC_DriverDef *driver;
 	void *driver_state;
+        uint64_t id;
+	uint64_t dri_index;
         int dri_group;
 } ARC_Resource;
 
 typedef struct ARC_File {
+        ARC_CacheEntry *shared;
+        ARC_GraphNode *node;
 	long offset;
-	ARC_GraphNode *node;
 } ARC_File;
 
 typedef struct ARC_ControlPacketInstruction {
