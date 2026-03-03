@@ -65,23 +65,16 @@ static int nvme_pci_poll_completion(ARC_Resource *transport, qs_wrap_t *wrap, qc
         
         nvme_qpair_t *qpair = wrap->qpair;
         qs_entry_t *cmd = wrap->cmd;
-	qc_entry_t *qc = (struct qc_entry *)qpair->cmpq->base;
+	volatile qc_entry_t *qc = (struct qc_entry *)qpair->cmpq->base;
         
         bool I = arch_interrupts_enabled();
         //ARC_ENABLE_INTERRUPT; // Causes a double fault
-        
-	size_t i = 0;
-        /*
+
+        size_t i = 0;
+
         do {
 		i = qpair->cmpq->idx;
-	} while (qc[i].phase != qpair->phase && qc[i].cid != cmd->cdw0.cid);
-        */
-        while (1) {
-                i = qpair->cmpq->idx;
-                if (qc[i].phase != qpair->phase && qc[i].cid != cmd->cdw0.cid) {
-                        break;
-                }
-        }
+        } while (qc[i].phase != qpair->phase || qc[i].cid != cmd->cdw0.cid);
         
         if (!I) {
                 ARC_DISABLE_INTERRUPT;
@@ -109,7 +102,7 @@ static int nvme_pci_poll_completion(ARC_Resource *transport, qs_wrap_t *wrap, qc
         
         int cmd_idx = qpair->id ? (cmd->cdw0.cid >> 6) & 0xFF : (cmd->cdw0.cid);
 	ringbuffer_free(qpair->subq, cmd_idx);
-
+        
 	return status;
 }
 
@@ -121,7 +114,7 @@ static int create_admin_qpair(driver_state_t *state, size_t qsize) {
 		return -1;
 	}
         
-        //memset(queues, 0, qsize * 2);
+        memset(queues, 0, qsize * 2);
 
         ARC_Ringbuffer *sub = init_ringbuffer(queues, NVME_ADMIN_QUEUE_SUB_LEN, sizeof(qs_entry_t));
 
@@ -145,7 +138,6 @@ static int create_admin_qpair(driver_state_t *state, size_t qsize) {
 
         ctrl_props_t *props = state->props;
         
-	memset(queues, 0, PAGE_SIZE * 2);
 	props->asq = ARC_HHDM_TO_PHYS(queues);
 	props->acq = ARC_HHDM_TO_PHYS(queues) + qsize;
 
