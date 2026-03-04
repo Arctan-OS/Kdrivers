@@ -29,8 +29,6 @@ typedef struct driver_state {
         int command_set;
         int qpair_base;
         int qpair_count;
-
-        ARC_Cache *l2;
 } driver_state_t;
 
 static int nvme_register_io_qpair(nvme_driver_state_t *state, nvme_qpair_t *qpair, uint8_t nvm_set, int irq) {

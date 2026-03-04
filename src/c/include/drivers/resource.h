@@ -33,7 +33,6 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "lib/cache/base.h"
 
 #define ARC_REGISTER_DRIVER(group, name) \
 	ARC_DriverDef _driver_##name##_##group
@@ -60,7 +59,6 @@ typedef struct ARC_Resource {
 } ARC_Resource;
 
 typedef struct ARC_File {
-        ARC_CacheEntry *shared;
         ARC_GraphNode *node;
 	long offset;
 } ARC_File;
