@@ -177,9 +177,6 @@ extern const ARC_DriverDef _empty_driver;
 '''.format(datetime.now(UTC).strftime("%d-%m-%Y"), driver_table_prefix, len(definitions))
 
   header_postamble = '''
-int dridefs_int_func_empty();
-size_t dridefs_size_t_func_empty();
-void *dridefs_void_func_empty();
 size_t dridefs_get_entry_count(int group);
 
 #endif // AUTOGEN_ARC_DRIVERS_DRI_DEFS
@@ -222,32 +219,9 @@ def construct_dri_defs_source(definitions, symbols, out_file):
 
 #include \"drivers/dri_defs.h\"
 
-const ARC_DriverDef _empty_driver = {{
-\t.init = dridefs_int_func_empty,
-\t.uninit = dridefs_int_func_empty,
-\t.read = dridefs_size_t_func_empty,
-\t.write = dridefs_size_t_func_empty,
-\t.seek = dridefs_int_func_empty,
-\t.rename = dridefs_int_func_empty,
-\t.stat = dridefs_int_func_empty,
-\t.create = dridefs_int_func_empty,
-\t.remove = dridefs_int_func_empty,
-\t.locate = dridefs_void_func_empty,
-}};
-
 '''.format(datetime.now(UTC).strftime("%d-%m-%Y"))
 
-  source_postamble = '''int dridefs_int_func_empty() {
-\treturn -1;
-}
-
-size_t dridefs_size_t_func_empty() {
-\treturn 0;
-}
-
-void *dridefs_void_func_empty() {
-\treturn NULL;
-}
+  source_postamble = '''
 '''
   
   out.write(source_preamble)

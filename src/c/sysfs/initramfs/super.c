@@ -150,13 +150,13 @@ static void *initramfs_locate(struct ARC_Resource *res, char *filename) {
 ARC_REGISTER_DRIVER(ARC_DRIGRP_FS_SUPER, initramfs) = {
 	.init = initramfs_init,
 	.uninit = initramfs_uninit,
-	.read = dridefs_size_t_func_empty,
-	.write = dridefs_size_t_func_empty,
-	.seek = dridefs_int_func_empty,
-	.rename = dridefs_int_func_empty,
+	.read = NULL,
+	.write = NULL,
+	.seek = NULL,
+	.rename = NULL,
 	.stat = initramfs_stat,
-	.create = dridefs_int_func_empty,
-	.remove = dridefs_int_func_empty,
+	.create = NULL,
+	.remove = NULL,
 	.locate = initramfs_locate,
 };
 

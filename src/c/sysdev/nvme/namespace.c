@@ -1,5 +1,6 @@
 #include "arch/smp.h"
 #include "arch/x86-64/config.h"
+#include "arctan.h"
 #include "config.h"
 #include "drivers/resource.h"
 #include "drivers/dri_defs.h"
@@ -314,8 +315,8 @@ ARC_REGISTER_DRIVER(ARC_DRIGRP_DEV, nvme_namespace) = {
 	.uninit = uninit_nvme_namespace,
 	.read = read_nvme_namespace,
 	.write = write_nvme_namespace,
-	.seek = dridefs_int_func_empty,
-	.rename = dridefs_int_func_empty,
+	.seek = NULL,
+	.rename = NULL,
 	.stat = stat_nvme_namespace,
 	.codes = NULL
 };

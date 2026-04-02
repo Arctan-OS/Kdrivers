@@ -26,6 +26,7 @@
  * Superblock dirvers for the EXT2 filesystem.
 */
 #include "abi-bits/seek-whence.h"
+#include "arctan.h"
 #include "drivers/cntrl_defs.h"
 #include "drivers/dri_defs.h"
 #include "drivers/sysfs/ext2/super.h"
@@ -455,8 +456,8 @@ ARC_REGISTER_DRIVER(ARC_DRIGRP_FS_SUPER, ext2) = {
 	.uninit = uninit_ext2_super,
 	.write = write_ext2_super,
 	.read = read_ext2_super,
-	.seek = dridefs_int_func_empty,
-	.rename = dridefs_int_func_empty,
+	.seek = NULL,
+	.rename = NULL,
 	.stat = stat_ext2_super,
 	.control = control_ext2_super,
 	.create = create_ext2_super,

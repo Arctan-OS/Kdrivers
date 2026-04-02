@@ -48,7 +48,9 @@ static int init_rtc(struct ARC_Resource *res, void *args) {
 	return 0;
 }
 
-static int uninit_rtc() {
+static int uninit_rtc(ARC_Resource *res) {
+        (void)res;
+        
 	return 0;
 }
 
@@ -88,8 +90,8 @@ ARC_REGISTER_DRIVER(ARC_DRIGRP_DEV_ACPI, rtc) = {
 	.uninit = uninit_rtc,
         .read = read_rtc,
         .write = write_rtc,
-	.seek = dridefs_int_func_empty,
-	.rename = dridefs_int_func_empty,
+	.seek = NULL,
+	.rename = NULL,
 	.stat = stat_rtc,
 	.codes = acpi_codes
 };

@@ -37,7 +37,7 @@ static int init_hpet(struct ARC_Resource *res, void *args) {
 	return 1;
 }
 
-static int uninit_hpet() {
+static int uninit_hpet(ARC_Resource *res) {
 	return 0;
 };
 
@@ -76,8 +76,8 @@ ARC_REGISTER_DRIVER(ARC_DRIGRP_DEV_ACPI, hpet) = {
 	.uninit = uninit_hpet,
 	.read = read_hpet,
 	.write = write_hpet,
-	.seek = dridefs_int_func_empty,
-	.rename = dridefs_int_func_empty,
+	.seek = NULL,
+	.rename = NULL,
 	.stat = stat_hpet,
         .codes = acpi_codes
 };

@@ -26,6 +26,7 @@
  * File driver for the EXT2 filesystem.
 */
 #include "abi-bits/seek-whence.h"
+#include "arctan.h"
 #include "drivers/dri_defs.h"
 #include "drivers/resource.h"
 #include "drivers/sysfs/ext2/ext2.h"
@@ -123,11 +124,11 @@ ARC_REGISTER_DRIVER(ARC_DRIGRP_FS_FILE, ext2) = {
 	.uninit = uninit_ext2_file,
 	.write = write_ext2_file,
 	.read = read_ext2_file,
-	.seek = dridefs_int_func_empty,
-	.rename = dridefs_int_func_empty,
+	.seek = NULL,
+	.rename = NULL,
 	.stat = stat_ext2_file,
 	.control = NULL,
-	.create = dridefs_int_func_empty,
-	.remove = dridefs_int_func_empty,
-	.locate = dridefs_void_func_empty,
+	.create = NULL,
+	.remove = NULL,
+	.locate = NULL,
 };

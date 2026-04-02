@@ -26,6 +26,7 @@
  * Driver for RAM files or buffers which are accesible by the VFS.
 */
 #include "abi-bits/seek-whence.h"
+#include "arctan.h"
 #include "drivers/dri_defs.h"
 #include "drivers/resource.h"
 #include "global.h"
@@ -149,7 +150,7 @@ ARC_REGISTER_DRIVER(ARC_DRIGRP_FS_FILE, buffer) = {
 	.read = buffer_read,
 	.write = buffer_write,
 	.seek = buffer_seek,
-	.rename = dridefs_int_func_empty,
+	.rename = NULL,
 	.stat = buffer_stat,
 	.codes = NULL
 };

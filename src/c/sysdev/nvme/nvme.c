@@ -368,8 +368,8 @@ ARC_REGISTER_DRIVER(ARC_DRIGRP_DEV, nvme) = {
 	.uninit = uninit_nvme,
 	.read = read_nvme,
 	.write = write_nvme,
-	.seek = dridefs_int_func_empty,
-	.rename = dridefs_int_func_empty,
+	.seek = NULL,
+	.rename = NULL,
 	.stat = stat_nvme_pci,
 	.codes = NULL
 };

@@ -280,7 +280,7 @@ static int init_uart(struct ARC_Resource *res, void *args) {
 	return 0;
 }
 
-static int uninit_uart() {
+static int uninit_uart(ARC_Resource *res) {
 	return 0;
 }
 
@@ -323,8 +323,8 @@ ARC_REGISTER_DRIVER(ARC_DRIGRP_DEV_ACPI, uart) = {
 	.uninit = uninit_uart,
         .read = read_uart,
         .write = write_uart,
-	.seek = dridefs_int_func_empty,
-	.rename = dridefs_int_func_empty,
+	.seek = NULL,
+	.rename = NULL,
 	.stat = stat_uart,
 	.codes = acpi_codes
 };

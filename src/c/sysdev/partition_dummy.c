@@ -25,6 +25,7 @@
  * @DESCRIPTION
 */
 #include "abi-bits/seek-whence.h"
+#include "arctan.h"
 #include "drivers/dri_defs.h"
 #include "drivers/resource.h"
 #include "drivers/sysdev/partition_dummy.h"
@@ -85,7 +86,7 @@ static int init_partition_dummy(struct ARC_Resource *res, void *args) {
 	return 0;
 }
 
-static int uninit_partition_dummy() {
+static int uninit_partition_dummy(ARC_Resource *res) {
 	return 0;
 };
 
@@ -134,8 +135,8 @@ ARC_REGISTER_DRIVER(ARC_DRIGRP_DEV, partition_dummy) = {
 	.uninit = uninit_partition_dummy,
 	.read = read_partition_dummy,
 	.write = write_partition_dummy,
-	.seek = dridefs_int_func_empty,
-	.rename = dridefs_int_func_empty,
+	.seek = NULL,
+	.rename = NULL,
 	.stat = stat_partition_dummy,
 };
 

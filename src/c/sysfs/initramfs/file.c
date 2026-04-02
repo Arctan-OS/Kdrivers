@@ -26,6 +26,7 @@
  * CPIO file driver for the initramfs image.
 */
 #include "abi-bits/errno.h"
+#include "arctan.h"
 #include "drivers/dri_defs.h"
 #include "drivers/resource.h"
 #include "fs/vfs.h"
@@ -167,9 +168,9 @@ ARC_REGISTER_DRIVER(ARC_DRIGRP_FS_FILE, initramfs) = {
 	.read = initramfs_read,
 	.write = initramfs_write,
 	.seek = initramfs_seek,
-	.rename = dridefs_int_func_empty,
+	.rename = NULL,
 	.stat = initramfs_stat,
-	.create = dridefs_int_func_empty,
-	.remove = dridefs_int_func_empty,
-	.locate = dridefs_void_func_empty,
+	.create = NULL,
+	.remove = NULL,
+	.locate = NULL,
 };
