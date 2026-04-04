@@ -1,0 +1,12 @@
+#ifndef AUTOGEN_ARC_DRIVERS_DRI_DEFS
+#define AUTOGEN_ARC_DRIVERS_DRI_DEFS
+
+#include "drivers/resource.h"
+#include <stdint.h>
+#include <stdint.h>
+  
+#define ARC_DRIDEF_CODES_TERMINATOR ((uint64_t)-1)
+
+\{0\}
+
+#endif // AUTOGEN_ARC_DRIVERS_DRI_DEFS
