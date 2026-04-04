@@ -35,7 +35,7 @@
 #include <stdint.h>
 
 #define ARC_REGISTER_DRIVER(group, name) \
-	ARC_DriverDef _driver_##name##_##group
+	ARC_DriverDef _dridefs_##name##_##group
 
 #define ARC_SHARE_DRIVER_INDICES(...) ;
 
