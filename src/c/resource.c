@@ -36,9 +36,9 @@ static uint64_t current_id = 0;
 
 ARC_Resource *init_resource(int dri_group, int64_t dri_index, void *args) {
         size_t entry_count = dridefs_get_entry_count(dri_group);
-	if (dri_group < 0 || dri_index < 0 || dri_group >= ARC_DRIDEF_DRIVER_GROUPS
+	if (dri_group < 0 || dri_index < 0 || dri_group >= ARC_DRIDEF_GROUPS
             || (size_t)dri_index >= entry_count) {
-		ARC_DEBUG(ERR, "Invalid parameters group: !(0<=%d<%d) or index: !(0<=%"PRId64"<%lu) are true\n", dri_group, ARC_DRIDEF_DRIVER_GROUPS, dri_index, entry_count);
+		ARC_DEBUG(ERR, "Invalid parameters group: !(0<=%d<%d) or index: !(0<=%"PRId64"<%lu) are true\n", dri_group, ARC_DRIDEF_GROUPS, dri_index, entry_count);
 		return NULL;
 	}
 
