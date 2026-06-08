@@ -4,12 +4,12 @@
  * @author awewsomegamer <awewsomegamer@gmail.com>
  *
  * @LICENSE
- * Arctan-OS/Kernel - Operating System Kernel
- * Copyright (C) 2023-2025 awewsomegamer
+ * Arctan-OS/Kdrivers - Operating System Drivers
+ * Copyright (C) 2023-2026 awewsomegamer
  *
- * This file is part of Arctan-OS/Kernel.
+ * This file is part of Arctan-OS/Kdrivers.
  *
- * Arctan is free software; you can redistribute it and/or
+ * Arctan-OS/Kdrivers is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; version 2
  *
